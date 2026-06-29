@@ -3,35 +3,31 @@
 An IntelliJ IDEA plugin to **browse LMDB (Lightning Memory-Mapped Database)** data stores directly
 inside the IDE. Read-only and safe; the access layer is built so editing can be added later.
 
-## Features
-
-- Open an LMDB environment: a directory (`data.mdb` + `lock.mdb`), a `data.mdb` file, or a
-  single-file `*.mdb` store (`MDB_NOSUBDIR`). Opened read-only (`MDB_RDONLY_ENV`).
-- Browse named sub-databases (DBIs) with entry counts.
-- Paged entries table with lazy cursor paging ("Load more") — handles very large DBIs without
-  loading everything into memory.
-- Decode opaque byte keys/values: **hex dump**, **UTF-8/ASCII**, auto-detected **JSON**
-  (pretty-printed), and **integers** (int8/16/32/64 × little/big endian, signed + unsigned).
-- Per-pane decoder override, plus a pluggable decoder **extension point**
-  (`team.shade.lmdbviewer.byteDecoder`) for binary formats like protobuf / msgpack.
-- Key-prefix search (UTF-8 text, or `0x…` hex) using cursor seek.
-- Environment stats (map size, page size, readers, transaction id, DBI count).
+It opens an LMDB environment (a `data.mdb` directory or single-file `*.mdb` store), browses named
+sub-databases (DBIs), pages large entry sets lazily, and decodes opaque byte keys/values
+(hex, UTF-8/ASCII, JSON, integers) through a pluggable decoder extension point.
 
 ## Build & run
 
 Requires **JDK 21**. Targets IntelliJ **2024.2+**.
 
 ```bash
-./gradlew runIde                          # launch a sandbox IDE with the plugin
-./gradlew test                            # decoder + access-layer tests (9 tests)
-./gradlew buildPlugin                     # build/distributions/*.zip for install-from-disk
-./gradlew verifyPlugin                    # JetBrains Plugin Verifier (needs network; run before release)
+./gradlew runIde          # launch a sandbox IDE with the plugin
+./gradlew test            # decoder + access-layer tests
+./gradlew buildPlugin     # build/distributions/*.zip for install-from-disk
+./gradlew verifyPlugin    # JetBrains Plugin Verifier (needs network; run before release)
 ```
 
-`test` and `buildPlugin` are verified green. The Gradle wrapper is checked in, so `./gradlew` works
-directly.
+## Documentation
 
-Open via **File ▸ Open LMDB Environment…**, the tool window's *Open Environment* button, or
-right-click a `.mdb` file in the Project view ▸ *Open LMDB Environment…*.
+Full documentation is an **Open Knowledge Format (OKF v0.1)** bundle under [`docs/`](docs/index.md):
 
-See [CLAUDE.md](CLAUDE.md) for architecture and the read-only → read-write roadmap.
+- [Overview](docs/overview.md) · [Features](docs/features.md) · [LMDB concepts](docs/lmdb-concepts.md)
+- [Architecture](docs/architecture/index.md) — [access](docs/architecture/access-layer.md),
+  [decode](docs/architecture/decode-layer.md), [ui](docs/architecture/ui-layer.md) layers,
+  [native-loading gotcha](docs/architecture/native-loading.md),
+  [decoder extension point](docs/architecture/decoder-extension-point.md)
+- [Build, run & test](docs/operations/build-run-test.md) ·
+  [Conventions](docs/conventions.md) · [Roadmap](docs/roadmap.md)
+
+For contributors/agents, [CLAUDE.md](CLAUDE.md) is the index into the bundle.
