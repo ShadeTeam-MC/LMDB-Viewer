@@ -1,0 +1,64 @@
+<idea-plugin>
+    <id>team.shade.lmdbviewer</id>
+    <name>LMDB Viewer</name>
+    <vendor email="contact@shademc.ru">ShadeTeam</vendor>
+
+    <description><![CDATA[
+        <h2>LMDB Viewer</h2>
+        <p>Browse <b>LMDB (Lightning Memory-Mapped Database)</b> data stores directly inside the IDE.</p>
+        <ul>
+            <li>Open an LMDB environment (a directory or a single <code>*.mdb</code> file), read-only and safe.</li>
+            <li>Explore named sub-databases (DBIs) and their entries with lazy paging for huge stores.</li>
+            <li>Decode opaque byte keys/values: hex dump, UTF-8/ASCII text, auto-detected JSON, integers.</li>
+            <li>Pluggable decoders via an extension point for binary formats (protobuf, msgpack, ...).</li>
+            <li>Search by key prefix and inspect DUPSORT multi-value keys.</li>
+        </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        <ul><li>0.1.0 — Initial read-only viewer: environments, DBIs, paged entries, decoders.</li></ul>
+    ]]></change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensionPoints>
+        <!-- Implement team.shade.lmdbviewer.decode.ByteDecoder and register here to add formats. -->
+        <extensionPoint
+            name="byteDecoder"
+            interface="team.shade.lmdbviewer.decode.ByteDecoder"
+            dynamic="true"/>
+    </extensionPoints>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+            id="LMDB Viewer"
+            anchor="right"
+            icon="AllIcons.Toolwindows.ToolWindowHierarchy"
+            factoryClass="team.shade.lmdbviewer.ui.LmdbViewerToolWindowFactory"/>
+
+        <applicationService
+            serviceImplementation="team.shade.lmdbviewer.lmdb.LmdbEnvironmentService"/>
+        <applicationService
+            serviceImplementation="team.shade.lmdbviewer.settings.RecentEnvironmentsService"/>
+    </extensions>
+
+    <!-- Built-in decoders, contributed through our own extension point. -->
+    <extensions defaultExtensionNs="team.shade.lmdbviewer">
+        <byteDecoder implementation="team.shade.lmdbviewer.decode.JsonDecoder"/>
+        <byteDecoder implementation="team.shade.lmdbviewer.decode.IntegerDecoder"/>
+        <byteDecoder implementation="team.shade.lmdbviewer.decode.Utf8Decoder"/>
+        <byteDecoder implementation="team.shade.lmdbviewer.decode.AsciiDecoder"/>
+        <byteDecoder implementation="team.shade.lmdbviewer.decode.HexDumpDecoder"/>
+    </extensions>
+
+    <actions>
+        <action
+            id="LmdbViewer.OpenEnvironment"
+            class="team.shade.lmdbviewer.ui.OpenEnvironmentAction"
+            text="Open LMDB Environment..."
+            description="Open an LMDB environment in the LMDB Viewer tool window">
+            <add-to-group group-id="FileOpenGroup" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
