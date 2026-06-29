@@ -6,6 +6,3 @@ out/
 .idea/
 !.idea/runConfigurations
 .kotlin/
-
-# Local LMDB sample database used for manual testing (not source)
-todo/
