@@ -1,0 +1,11 @@
+.gradle/
+.intellijPlatform/
+build/
+out/
+*.iml
+.idea/
+!.idea/runConfigurations
+.kotlin/
+
+# Local LMDB sample database used for manual testing (not source)
+todo/
