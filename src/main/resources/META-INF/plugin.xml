@@ -7,16 +7,19 @@
         <h2>LMDB Viewer</h2>
         <p>Browse <b>LMDB (Lightning Memory-Mapped Database)</b> data stores directly inside the IDE.</p>
         <ul>
-            <li>Open an LMDB environment (a directory or a single <code>*.mdb</code> file), read-only and safe.</li>
+            <li>Open an LMDB environment (a directory or a single <code>*.mdb</code> file); read-only by default and safe.</li>
             <li>Explore named sub-databases (DBIs) and their entries with lazy paging for huge stores.</li>
             <li>Decode opaque byte keys/values: hex dump, UTF-8/ASCII text, auto-detected JSON, integers.</li>
             <li>Pluggable decoders via an extension point for binary formats (protobuf, msgpack, ...).</li>
             <li>Search by key prefix and inspect DUPSORT multi-value keys.</li>
+            <li><b>Optional edit mode</b>: opt in per environment to add, edit, or delete entries (with confirmation).</li>
         </ul>
     ]]></description>
 
     <change-notes><![CDATA[
-        <ul><li>0.1.0 — Initial read-only viewer: environments, DBIs, paged entries, decoders.</li></ul>
+        <ul>
+            <li>0.9.0 — Optional edit mode: add / edit value / delete entries behind an explicit per-environment toggle.</li>
+        </ul>
     ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>

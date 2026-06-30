@@ -13,8 +13,13 @@ IntelliJ Platform Swing.
 * `LmdbViewerToolWindowFactory` builds the "LMDB Viewer" tool window (right dock).
 * `LmdbViewerPanel`: env/DBI tree (left) + entries table (center, paged via "Load more") +
   `DetailPanel` (bottom, per-decoder view of selected key & value) + key-prefix search.
-* Never block the EDT: env open and page fetches run on a pooled thread
-  (`Application.executeOnPooledThread`), results applied via `invokeLater`.
+* **Edit mode** (opt-in): the *Edit mode* toggle reopens the selected env writable via
+  `LmdbEnvironmentService.open(path, writable = true)`; the writable env node is marked `[RW]`. Add /
+  Edit value / Delete (toolbar buttons + table context menu) collect bytes through
+  `EntryEditorDialog` (UTF-8/Hex via `ByteCodec`), confirm with `Messages`, then route to
+  `connection.mutations` on the pooled thread and refresh the page + DBI counts.
+* Never block the EDT: env open, page fetches, and mutations run on a pooled thread
+  (`Application.executeOnPooledThread`), results applied via `invokeLater` (the `runBg` helper).
 
 ## Related
 

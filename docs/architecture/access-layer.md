@@ -10,14 +10,19 @@ resource: src/main/kotlin/team/shade/lmdbviewer/lmdb
 
 The **only** place that imports `org.lmdbjava.*`.
 
-* `LmdbEnvironmentService` (application service): opens/closes envs read-only, caches one open
-  `LmdbConnection` per absolute path.
+* `LmdbEnvironmentService` (application service): opens/closes envs and caches one open
+  `LmdbConnection` per absolute path. `open(path, writable)` selects the mode: read-only (default)
+  adds `MDB_RDONLY_ENV`; writable (edit mode) drops it. A cached connection is reused only when its
+  mode matches — toggling edit mode **closes and reopens** the env in place. Writable opens use a
+  larger map size (head-room) so a small edit doesn't immediately hit `MDB_MAP_FULL`.
 * `LmdbConnection`: lists DBIs, returns env stats, and pages entries via a cursor. Paging uses a
   **continuation token = last key seen** (`KeyRange.greaterThan(lastKey)`), so we never load a
   whole DBI into memory and never hold a long-lived read txn across UI interactions — each page
-  fetch opens and closes its own short read txn.
-* `MutationOps`: a narrow no-op interface in v1. This is the seam where write transactions slot
-  in later — do not scatter write logic elsewhere. See the [Roadmap](/roadmap.md).
+  fetch opens and closes its own short read txn. Reads behave identically on read-only and writable
+  envs. `connection.writable` reports the mode; `connection.mutations` is the write seam.
+* `MutationOps`: the single write seam. `ReadOnlyMutationOps` rejects every call;
+  `WritableMutationOps` (used only on a writable env) runs `put`/`delete` in a short
+  `Env.txnWrite()` and commits. Do not scatter write logic elsewhere. See the [Roadmap](/roadmap.md).
 * Models: `LmdbEntry(key, value, valueSize)`, `EntryPage(entries, nextKey)`, `DbiInfo`,
   `EnvStats`.
 
@@ -30,7 +35,11 @@ The **only** place that imports `org.lmdbjava.*`.
 * **Open a DBI handle before the transaction that reads it begins.** A DBI opened *after* a txn
   started is not visible to that txn, so `dbi.stat(txn)` returns wrong counts. `listDatabases`
   opens all handles first, then begins one read txn to stat them; `readPage` opens the DBI before
-  its iteration txn. The unnamed/main DBI is exempt (always known to every txn).
+  its iteration txn. `WritableMutationOps` opens the DBI before its write txn too. The unnamed/main
+  DBI is exempt (always known to every txn).
+* **Single writer.** LMDB allows only one write txn at a time per env. Each `WritableMutationOps`
+  call opens, commits, and closes its own write txn, so mutations are effectively serialized; never
+  hold a write txn open across UI interactions.
 
 ## Related
 

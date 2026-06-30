@@ -22,13 +22,19 @@ import team.shade.lmdbviewer.lmdb.LmdbEnvironmentService
 import team.shade.lmdbviewer.settings.RecentEnvironmentsService
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.JButton
+import javax.swing.JMenuItem
 import javax.swing.JPanel
+import javax.swing.JPopupMenu
+import javax.swing.JToggleButton
 import javax.swing.ListSelectionModel
 import javax.swing.SwingConstants
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
 import javax.swing.tree.TreeSelectionModel
 
 /**
@@ -53,6 +59,15 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val loadMoreButton = JButton("Load more")
     private val statusLabel = JBLabel(" ")
 
+    // Edit-mode controls (writable access is opt-in, per environment).
+    private val editModeButton = JToggleButton("Edit mode")
+    private val addButton = JButton("Add…")
+    private val editButton = JButton("Edit value…")
+    private val deleteButton = JButton("Delete")
+    private val editPopupItem = JMenuItem("Edit value…")
+    private val deletePopupItem = JMenuItem("Delete")
+    private var updatingToggle = false
+
     // Paging state for the currently selected DBI.
     private var currentDbi: DbiNode? = null
     private var nextKey: ByteArray? = null
@@ -73,6 +88,15 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(JButton("Open Environment…").apply { addActionListener { chooseAndOpen() } })
         add(JButton("Refresh").apply { addActionListener { refreshSelected() } })
         add(JButton("Close").apply { addActionListener { closeSelectedEnv() } })
+
+        editModeButton.toolTipText = "Reopen the selected environment for writing so entries can be edited."
+        editModeButton.addActionListener { onToggleEditMode() }
+        add(editModeButton)
+        addButton.apply { toolTipText = "Add a new key/value entry."; addActionListener { addEntry() } }
+        editButton.apply { toolTipText = "Edit the value of the selected entry."; addActionListener { editValue() } }
+        deleteButton.apply { toolTipText = "Delete the selected entry."; addActionListener { deleteEntry() } }
+        add(addButton); add(editButton); add(deleteButton)
+
         add(JBLabel("   Key prefix:"))
         searchField.columns = 18
         searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff)."
@@ -116,7 +140,8 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
         tree.addTreeSelectionListener {
             val node = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return@addTreeSelectionListener
-            (node.userObject as? DbiNode)?.let { selectDbi(it) }
+            val dbi = node.userObject as? DbiNode
+            if (dbi != null) selectDbi(dbi) else updateEditActions()
         }
     }
 
@@ -127,7 +152,27 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (e.valueIsAdjusting) return@addListSelectionListener
             val entry = table.selectedRow.takeIf { it >= 0 }?.let { tableModel.entryAt(it) }
             detailPanel.showEntry(entry)
+            updateEditActions()
         }
+
+        val popup = JPopupMenu().apply {
+            editPopupItem.addActionListener { editValue() }
+            deletePopupItem.addActionListener { deleteEntry() }
+            add(editPopupItem)
+            add(deletePopupItem)
+        }
+        table.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) = maybeShowPopup(e)
+            override fun mouseReleased(e: MouseEvent) = maybeShowPopup(e)
+            private fun maybeShowPopup(e: MouseEvent) {
+                if (!e.isPopupTrigger) return
+                val row = table.rowAtPoint(e.point)
+                if (row >= 0) table.setRowSelectionInterval(row, row)
+                updateEditActions()
+                popup.show(table, e.x, e.y)
+            }
+        })
+        updateEditActions()
     }
 
     // ---- Actions --------------------------------------------------------------------------------
@@ -198,6 +243,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         detailPanel.showEntry(null)
         loadPage(reset = true)
         showEnvStats(dbiNode.connection)
+        updateEditActions()
     }
 
     private fun applySearch() {
@@ -236,6 +282,185 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         currentDbi?.let { selectDbi(it) }
     }
 
+    // ---- Editing --------------------------------------------------------------------------------
+
+    /** The environment the edit controls act on: the selected DBI's env, else the selected tree node's. */
+    private fun selectedConnection(): LmdbConnection? {
+        currentDbi?.let { return it.connection }
+        val node = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return null
+        return (node.userObject as? EnvNode)?.connection ?: (node.userObject as? DbiNode)?.connection
+    }
+
+    private fun onToggleEditMode() {
+        if (updatingToggle) return
+        val conn = selectedConnection()
+        if (conn == null) {
+            setToggleSelectedSilently(false)
+            setStatus("Select an environment first")
+            return
+        }
+        val wantWritable = editModeButton.isSelected
+        if (conn.writable == wantWritable) return
+        if (wantWritable) {
+            val choice = Messages.showYesNoDialog(
+                project,
+                "Edit mode reopens this environment for WRITING and removes read-only safety.\n\n" +
+                    "Make sure no other process has it open. Changes are written directly to the database " +
+                    "and cannot be undone.\n\nContinue?",
+                "Enable Edit Mode",
+                "Enable",
+                "Cancel",
+                Messages.getWarningIcon(),
+            )
+            if (choice != Messages.YES) {
+                setToggleSelectedSilently(false)
+                return
+            }
+        }
+        reopen(conn.path, wantWritable)
+    }
+
+    /** Closes and reopens [path] in the requested mode, then rebuilds its node and reselects the DBI. */
+    private fun reopen(path: String, writable: Boolean) {
+        val keepDbi = currentDbi?.info?.name
+        setStatus(if (writable) "Reopening for writing…" else "Reopening read-only…")
+        runBg(
+            work = {
+                val connection = service.open(path, writable)
+                connection to connection.listDatabases()
+            },
+            onSuccess = { (connection, dbis) ->
+                addEnvNode(connection, dbis)
+                // Drop the reference to the now-closed old connection; reselect re-sets it on success.
+                currentDbi = null
+                tableModel.reset(emptyList())
+                detailPanel.showEntry(null)
+                reselectDbi(connection, keepDbi)
+                updateEditActions()
+                setStatus("${if (writable) "Edit mode ON" else "Read-only"} — ${connection.path}")
+            },
+            onError = { t ->
+                setToggleSelectedSilently(false)
+                updateEditActions()
+                setStatus("Failed to reopen: ${t.message}")
+                Messages.showErrorDialog(project, t.message ?: "Unknown error", "Reopen Environment")
+            },
+        )
+    }
+
+    private fun addEntry() {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val dialog = EntryEditorDialog.forAdd(project)
+        if (!dialog.showAndGet()) return
+        val key = dialog.resultKey ?: return
+        val value = dialog.resultValue ?: return
+        runBg(
+            work = { conn.mutations.put(dbi.info.name, key, value) },
+            onSuccess = { setStatus("Added entry"); refreshAfterMutation(conn, dbi.info.name) },
+            onError = { t -> mutationError("add", t) },
+        )
+    }
+
+    private fun editValue() {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val entry = table.selectedRow.takeIf { it >= 0 }?.let { tableModel.entryAt(it) } ?: return
+        val dialog = EntryEditorDialog.forEditValue(project, entry.key, entry.value)
+        if (!dialog.showAndGet()) return
+        val value = dialog.resultValue ?: return
+        runBg(
+            work = { conn.mutations.put(dbi.info.name, entry.key, value) },
+            onSuccess = { setStatus("Updated value"); refreshAfterMutation(conn, dbi.info.name) },
+            onError = { t -> mutationError("update", t) },
+        )
+    }
+
+    private fun deleteEntry() {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val entry = table.selectedRow.takeIf { it >= 0 }?.let { tableModel.entryAt(it) } ?: return
+        val choice = Messages.showYesNoDialog(
+            project,
+            "Delete entry with key:\n${Previews.preview(entry.key)}\n\nThis cannot be undone.",
+            "Delete Entry",
+            "Delete",
+            "Cancel",
+            Messages.getWarningIcon(),
+        )
+        if (choice != Messages.YES) return
+        runBg(
+            work = { conn.mutations.delete(dbi.info.name, entry.key, entry.value) },
+            onSuccess = { setStatus("Deleted entry"); refreshAfterMutation(conn, dbi.info.name) },
+            onError = { t -> mutationError("delete", t) },
+        )
+    }
+
+    /** After a write: re-list DBIs (refreshes entry counts) and reload the current DBI's page. */
+    private fun refreshAfterMutation(connection: LmdbConnection, dbiName: String?) {
+        runBg(
+            work = { connection.listDatabases() },
+            onSuccess = { dbis ->
+                addEnvNode(connection, dbis)
+                reselectDbi(connection, dbiName)
+            },
+            onError = { },
+        )
+    }
+
+    private fun mutationError(op: String, t: Throwable) {
+        setStatus("Failed to $op entry: ${t.message}")
+        Messages.showErrorDialog(
+            project,
+            t.message ?: "Unknown error",
+            "LMDB ${op.replaceFirstChar { it.uppercase() }} Failed",
+        )
+    }
+
+    private fun findEnvNode(path: String): DefaultMutableTreeNode? {
+        for (i in 0 until rootNode.childCount) {
+            val child = rootNode.getChildAt(i) as DefaultMutableTreeNode
+            if ((child.userObject as? EnvNode)?.connection?.path == path) return child
+        }
+        return null
+    }
+
+    /** Selects the DBI named [dbiName] under [connection]'s node, firing the normal selection flow. */
+    private fun reselectDbi(connection: LmdbConnection, dbiName: String?) {
+        val envNode = findEnvNode(connection.path) ?: return
+        for (i in 0 until envNode.childCount) {
+            val child = envNode.getChildAt(i) as DefaultMutableTreeNode
+            val dbi = child.userObject as? DbiNode ?: continue
+            if (dbi.info.name == dbiName) {
+                tree.selectionPath = TreePath(arrayOf<Any>(rootNode, envNode, child))
+                return
+            }
+        }
+    }
+
+    private fun setToggleSelectedSilently(selected: Boolean) {
+        updatingToggle = true
+        editModeButton.isSelected = selected
+        updatingToggle = false
+    }
+
+    private fun updateEditActions() {
+        val envConn = selectedConnection()
+        editModeButton.isEnabled = envConn != null
+        setToggleSelectedSilently(envConn?.writable == true)
+
+        val writable = currentDbi?.connection?.writable == true
+        val hasRow = table.selectedRow >= 0
+        addButton.isEnabled = writable
+        editButton.isEnabled = writable && hasRow
+        deleteButton.isEnabled = writable && hasRow
+        editPopupItem.isEnabled = writable && hasRow
+        deletePopupItem.isEnabled = writable && hasRow
+    }
+
     private fun closeSelectedEnv() {
         val node = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return
         val path = (node.userObject as? EnvNode)?.connection?.path
@@ -247,6 +472,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         tableModel.reset(emptyList())
         detailPanel.showEntry(null)
         currentDbi = null
+        updateEditActions()
         setStatus("Closed $path")
     }
 
@@ -295,8 +521,11 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     /** Tree node payloads. */
     private class EnvNode(val connection: LmdbConnection) {
-        override fun toString(): String = connection.path.substringAfterLast('/').substringAfterLast('\\')
-            .ifEmpty { connection.path }
+        override fun toString(): String {
+            val name = connection.path.substringAfterLast('/').substringAfterLast('\\')
+                .ifEmpty { connection.path }
+            return if (connection.writable) "$name  [RW]" else name
+        }
     }
 
     private class DbiNode(val connection: LmdbConnection, val info: DbiInfo) {

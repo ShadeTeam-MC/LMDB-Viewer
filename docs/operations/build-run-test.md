@@ -13,7 +13,7 @@ JDK **21** required. Target platform: IntelliJ **2024.2+** (`since-build 242`).
 ```bash
 ./gradlew runIde         # launch a sandbox IDE with the plugin (jvmArgs add --add-opens, see below)
 ./gradlew buildPlugin     # produce build/distributions/*.zip for install-from-disk
-./gradlew test            # unit tests (decoders) + access-layer tests
+./gradlew test            # unit tests: decoders, access layer, settings, UI logic
 ./gradlew verifyPlugin     # JetBrains Plugin Verifier — run before release
 ```
 
@@ -30,7 +30,7 @@ The Gradle wrapper is checked in, so `./gradlew` works out of the box (Gradle 8.
 * `verifyPlugin` needs network access to the JetBrains product-releases feed to resolve target IDEs;
   add `pluginVerification { ides { recommended() } }` before running it. The status of
   `data.services.jetbrains.com` / `www.jetbrains.com` reachability decides whether it can run.
-* Status: `./gradlew test` (9 tests) and `./gradlew buildPlugin` both pass; `buildPlugin` produces
+* Status: `./gradlew test` (68 tests) and `./gradlew buildPlugin` both pass; `buildPlugin` produces
   `build/distributions/lmdb-viewer-<version>.zip` with bundled native LMDB libs.
 
 ## Related

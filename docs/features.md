@@ -8,7 +8,11 @@ tags: [features, ui, usage]
 # Features
 
 * Open an LMDB environment: a directory (`data.mdb` + `lock.mdb`), a `data.mdb` file, or a
-  single-file `*.mdb` store (`MDB_NOSUBDIR`). Opened read-only (`MDB_RDONLY_ENV`).
+  single-file `*.mdb` store (`MDB_NOSUBDIR`). Opened **read-only** by default (`MDB_RDONLY_ENV`).
+* **Optional edit mode** (opt-in per environment): toggle *Edit mode* in the tool window to reopen
+  the environment for writing, then **add**, **edit a value**, or **delete** entries. Each change is
+  confirmed via a dialog; key/value bytes are entered as UTF-8 text or hex. Read-only is the safe
+  default — editing removes that safety and writes directly to the database (no undo yet).
 * Browse named sub-databases (DBIs) with entry counts.
 * Paged entries table with lazy cursor paging ("Load more") — handles very large DBIs without
   loading everything into memory.

@@ -6,16 +6,25 @@ import org.lmdbjava.KeyRange
 import java.nio.charset.StandardCharsets
 
 /**
- * A read-only handle on one open LMDB environment. The single place that talks to lmdbjava for
- * reads. Thread-safe for concurrent page reads: each call opens and closes its own short read txn.
+ * A handle on one open LMDB environment. The single place that talks to lmdbjava for reads.
+ * Thread-safe for concurrent page reads: each call opens and closes its own short read txn.
  *
  * With the byte[] buffer proxy, lmdbjava copies keys/values out of the mmap, so the [LmdbEntry]
  * arrays returned here remain valid after their transaction closes.
+ *
+ * Reads work the same whether the environment was opened read-only or for writing. Writes go
+ * through [mutations]: a read-only environment rejects them, a writable one (edit mode) applies
+ * them. See [MutationOps].
  */
 class LmdbConnection internal constructor(
     val path: String,
     private val env: Env<ByteArray>,
+    /** True when the environment was opened without `MDB_RDONLY_ENV`, i.e. edit mode. */
+    val writable: Boolean = false,
 ) : AutoCloseable {
+
+    /** The write seam for this connection: rejects everything unless [writable]. */
+    val mutations: MutationOps = if (writable) WritableMutationOps(env) else ReadOnlyMutationOps
 
     /** Lists the main (unnamed) DBI plus every named DBI, with entry counts. */
     fun listDatabases(): List<DbiInfo> = guarded {

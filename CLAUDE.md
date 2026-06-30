@@ -1,8 +1,9 @@
 # CLAUDE.md — LMDB Viewer (IntelliJ IDEA plugin)
 
 A JetBrains/IntelliJ plugin that lets developers **browse LMDB (Lightning Memory-Mapped
-Database) data stores** directly inside the IDE. Version 1 is **read-only**; the access layer is
-shaped so write transactions can be added later without rework.
+Database) data stores** directly inside the IDE. Environments open **read-only by default**; an
+opt-in **edit mode** reopens an environment for writing and allows add/edit/delete, all behind the
+`MutationOps` seam in the access layer.
 
 ## Documentation lives in OKF — this file is only an index
 
