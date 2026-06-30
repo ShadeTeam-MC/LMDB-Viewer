@@ -10,8 +10,7 @@ sub-databases (DBIs), pages large entry sets lazily, and decodes opaque byte key
 
 ## Build & run
 
-Requires **JDK 21**. Supports IntelliJ **2024.2+** (`since-build 242`); the build/sandbox runs
-against **2025.2**.
+Requires **JDK 21**. Targets IntelliJ **2024.2+** (`since-build 242`).
 
 ```bash
 ./gradlew runIde          # launch a sandbox IDE with the plugin

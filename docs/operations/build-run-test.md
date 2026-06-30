@@ -8,10 +8,13 @@ resource: build.gradle.kts
 
 # Build / run / test
 
-JDK **21** required. Supported IDEs: IntelliJ **2024.2+** (`since-build 242`, `until-build` open).
-The build and `runIde` sandbox resolve **2025.2** (`platformVersion` in `gradle.properties`) — an IDE
-new enough to parse the Java 25 entry in the Gradle JVM-support matrix, which crashes 2024.2 on
-startup. Bumping the dev platform does not narrow the supported range.
+JDK **21** required. Target platform: IntelliJ **2024.2+** (`since-build 242`).
+
+> Note: on a JBR/JDK that reports Java **25**, the `runIde` sandbox (IDE 2024.2) logs a
+> non-fatal `GradleJvmSupportMatrix … IllegalArgumentException: 25` at startup — the IDE and plugin
+> still load. Building against a newer platform (2025.2) would silence it but currently breaks
+> `gradlew test` with IntelliJ Platform Gradle Plugin 2.1.0 (needs plugin 2.17.0 + Gradle 9), so we
+> stay on 2024.2.
 
 ```bash
 ./gradlew runIde         # launch a sandbox IDE with the plugin (jvmArgs add --add-opens, see below)

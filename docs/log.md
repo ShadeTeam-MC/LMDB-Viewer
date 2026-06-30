@@ -1,12 +1,12 @@
 # Log
 
-## 2026-06-30 (build)
+## 2026-07-01 (build)
 
-**Dev platform → 2025.2.** Bumped `platformVersion` 2024.2 → 2025.2 so the `runIde` sandbox can
-parse the Java 25 entry in the Gradle JVM-support matrix (2024.2 crashed at startup with
-`GradleJvmSupportMatrix … IllegalArgumentException: 25`). `since-build` stays 242 — supported range
-unchanged. IntelliJ Platform Gradle Plugin left at 2.1.0 (2.17.0 needs Gradle 9). Deleted the stale
-`build/idea-sandbox/IC-2024.2`; refreshed README + build-run-test docs.
+**Stayed on platform 2024.2.** Briefly bumped `platformVersion` to 2025.2 to silence the non-fatal
+Java-25 `GradleJvmSupportMatrix` warning in the `runIde` sandbox, but 2025.2 with IntelliJ Platform
+Gradle Plugin 2.1.0 breaks `gradlew test` (test-worker crash) — proper support needs plugin 2.17.0 +
+Gradle 9. Reverted to 2024.2, which is stable and green. The Java-25 sandbox warning is tolerated
+(non-fatal; the IDE and plugin still load) — see [build-run-test](operations/build-run-test.md).
 
 ## 2026-06-30 (later)
 
