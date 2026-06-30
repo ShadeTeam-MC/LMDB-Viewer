@@ -1,5 +1,13 @@
 # Log
 
+## 2026-06-30 (build)
+
+**Dev platform → 2025.2.** Bumped `platformVersion` 2024.2 → 2025.2 so the `runIde` sandbox can
+parse the Java 25 entry in the Gradle JVM-support matrix (2024.2 crashed at startup with
+`GradleJvmSupportMatrix … IllegalArgumentException: 25`). `since-build` stays 242 — supported range
+unchanged. IntelliJ Platform Gradle Plugin left at 2.1.0 (2.17.0 needs Gradle 9). Deleted the stale
+`build/idea-sandbox/IC-2024.2`; refreshed README + build-run-test docs.
+
 ## 2026-06-30 (later)
 
 **Optional edit mode (read-write).** Implemented the roadmap's read-only → read-write step behind

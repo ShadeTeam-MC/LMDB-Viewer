@@ -1,7 +1,8 @@
 # LMDB Viewer
 
 An IntelliJ IDEA plugin to **browse LMDB (Lightning Memory-Mapped Database)** data stores directly
-inside the IDE. Read-only and safe; the access layer is built so editing can be added later.
+inside the IDE. Read-only and safe by default, with an opt-in **edit mode** (add / edit value /
+delete) behind an explicit per-environment toggle.
 
 It opens an LMDB environment (a `data.mdb` directory or single-file `*.mdb` store), browses named
 sub-databases (DBIs), pages large entry sets lazily, and decodes opaque byte keys/values
@@ -9,7 +10,8 @@ sub-databases (DBIs), pages large entry sets lazily, and decodes opaque byte key
 
 ## Build & run
 
-Requires **JDK 21**. Targets IntelliJ **2024.2+**.
+Requires **JDK 21**. Supports IntelliJ **2024.2+** (`since-build 242`); the build/sandbox runs
+against **2025.2**.
 
 ```bash
 ./gradlew runIde          # launch a sandbox IDE with the plugin
