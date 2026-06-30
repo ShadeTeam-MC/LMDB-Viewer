@@ -1,5 +1,7 @@
 package team.shade.lmdbviewer.ui
 
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooser
@@ -228,6 +230,8 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun addEnvNode(connection: LmdbConnection, dbis: List<DbiInfo>) {
+        // Warn when a write grows this environment's map size (writable envs only).
+        connection.onMapResized = { newSize -> notifyMapResized(newSize) }
         removeEnvNode(connection.path) // replace an existing node for the same path, if present
         val envNode = DefaultMutableTreeNode(EnvNode(connection))
         dbis.forEach { envNode.add(DefaultMutableTreeNode(DbiNode(connection, it))) }
@@ -418,6 +422,22 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             t.message ?: "Unknown error",
             "LMDB ${op.replaceFirstChar { it.uppercase() }} Failed",
         )
+    }
+
+    /** Warns that a write outgrew the map and it was enlarged. Invoked off the EDT from the write. */
+    private fun notifyMapResized(newSize: Long) {
+        val size = StringUtil.formatFileSize(newSize)
+        ApplicationManager.getApplication().invokeLater {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("LMDB Viewer")
+                .createNotification(
+                    "LMDB map size expanded",
+                    "A write ran out of mapped space, so the environment was enlarged to $size.",
+                    NotificationType.WARNING,
+                )
+                .notify(project)
+            setStatus("Map size expanded to $size")
+        }
     }
 
     private fun findEnvNode(path: String): DefaultMutableTreeNode? {

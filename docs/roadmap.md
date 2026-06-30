@@ -20,12 +20,19 @@ Editing is implemented behind `MutationOps`, exactly along the planned seam:
 
 This first slice ships **confirmation, not undo**, and edits bytes via a UTF-8 / Hex toggle.
 
+## Done — automatic map growth
+
+A write that exhausts the environment's map size no longer fails: `WritableMutationOps` catches
+`MDB_MAP_FULL`, grows the map via `Env.setMapSize` (doubling, up to a 16 GiB ceiling) and retries
+the operation. `LmdbConnection.onMapResized` reports the new size, and the `ui/` layer shows a
+warning balloon (`LMDB map size expanded`). The grow happens after the failed write txn has closed,
+so no transaction is active when `setMapSize` runs.
+
 ## Next horizons
 
 * **Undo / change history** for the current edit session (capture inverse ops before each write).
 * **DUPSORT-aware editing UI** (add/remove individual duplicates from the detail panel).
 * **Rename key** as a first-class action (currently delete + add).
-* Guard against `MDB_MAP_FULL` on large writes (grow the map size on demand).
 
 ## Related
 

@@ -1,5 +1,18 @@
 # Log
 
+## 2026-07-01 (feat)
+
+**Automatic map growth.** A write that hits `MDB_MAP_FULL` now grows the environment's map size
+(`Env.setMapSize`, doubling up to 16 GiB) and retries, instead of failing. `LmdbConnection` gained an
+`onMapResized` hook; the UI shows a `LMDB map size expanded` warning balloon (new `notificationGroup`
+in `plugin.xml`). All growth/retry stays in `WritableMutationOps` (the `MutationOps` seam), and runs
+only after the failed write txn has closed. Tests grew to 70 (`writesGrowMapOnMapFull`, plus a
+service-path writable-write test). Verified on platform 2024.2.
+
+> Note: an earlier attempt concluded live `setMapSize` "crashes on Windows" — that was a false
+> signal from the unrelated 2025.2 + Gradle-plugin-2.1.0 test-worker crash (`Index: 1, Size: 1`).
+> On the stable 2024.2 toolchain, live growth works correctly.
+
 ## 2026-07-01 (build)
 
 **Stayed on platform 2024.2.** Briefly bumped `platformVersion` to 2025.2 to silence the non-fatal

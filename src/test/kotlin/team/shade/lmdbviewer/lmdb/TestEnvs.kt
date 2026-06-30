@@ -66,8 +66,8 @@ internal object TestEnvs {
     }
 
     /** Opens [dir] for writing (no `MDB_RDONLY_ENV`) and wraps it in a writable [LmdbConnection]. */
-    fun openWritable(dir: File): LmdbConnection {
-        val env = Env.create(ByteArrayProxy.PROXY_BA).setMaxDbs(MAX_DBS).setMapSize(MAP_SIZE)
+    fun openWritable(dir: File, mapSize: Long = MAP_SIZE): LmdbConnection {
+        val env = Env.create(ByteArrayProxy.PROXY_BA).setMaxDbs(MAX_DBS).setMapSize(mapSize)
             .open(dir, EnvFlags.MDB_NOTLS)
         return LmdbConnection(dir.absolutePath, env, writable = true)
     }

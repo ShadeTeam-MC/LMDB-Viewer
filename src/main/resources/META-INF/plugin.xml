@@ -43,6 +43,9 @@
             serviceImplementation="team.shade.lmdbviewer.lmdb.LmdbEnvironmentService"/>
         <applicationService
             serviceImplementation="team.shade.lmdbviewer.settings.RecentEnvironmentsService"/>
+
+        <!-- Balloon shown when a write grows the environment's map size. -->
+        <notificationGroup id="LMDB Viewer" displayType="BALLOON"/>
     </extensions>
 
     <!-- Built-in decoders, contributed through our own extension point. -->

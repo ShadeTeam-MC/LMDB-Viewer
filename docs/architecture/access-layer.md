@@ -22,7 +22,9 @@ The **only** place that imports `org.lmdbjava.*`.
   envs. `connection.writable` reports the mode; `connection.mutations` is the write seam.
 * `MutationOps`: the single write seam. `ReadOnlyMutationOps` rejects every call;
   `WritableMutationOps` (used only on a writable env) runs `put`/`delete` in a short
-  `Env.txnWrite()` and commits. Do not scatter write logic elsewhere. See the [Roadmap](/roadmap.md).
+  `Env.txnWrite()` and commits. On `MDB_MAP_FULL` it grows the map (`Env.setMapSize`, doubling up to
+  16 GiB) and retries, reporting the new size via `LmdbConnection.onMapResized`. Do not scatter write
+  logic elsewhere. See the [Roadmap](/roadmap.md).
 * Models: `LmdbEntry(key, value, valueSize)`, `EntryPage(entries, nextKey)`, `DbiInfo`,
   `EnvStats`.
 
@@ -40,6 +42,9 @@ The **only** place that imports `org.lmdbjava.*`.
 * **Single writer.** LMDB allows only one write txn at a time per env. Each `WritableMutationOps`
   call opens, commits, and closes its own write txn, so mutations are effectively serialized; never
   hold a write txn open across UI interactions.
+* **Grow the map with no transaction open.** `Env.setMapSize` requires that no transaction is active
+  in the process. `WritableMutationOps` only calls it from the `MDB_MAP_FULL` catch block — *after*
+  the failed write txn's `use {}` has closed it — then retries in a fresh txn.
 
 ## Related
 

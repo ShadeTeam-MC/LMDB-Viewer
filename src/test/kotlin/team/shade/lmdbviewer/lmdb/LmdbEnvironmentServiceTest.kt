@@ -1,6 +1,7 @@
 package team.shade.lmdbviewer.lmdb
 
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
@@ -121,6 +122,16 @@ class LmdbEnvironmentServiceTest {
         val readOnlyAgain = service.open(dir.absolutePath, writable = false)
         assertNotSame(writable, readOnlyAgain)
         assertFalse(readOnlyAgain.writable)
+    }
+
+    @Test
+    fun writableConnectionFromServiceAcceptsWrites() {
+        // Production path: obtain a writable connection from the service and mutate through it.
+        val freshDir = track(TestEnvs.newTempDir())
+        val conn = service.open(freshDir.absolutePath, writable = true)
+        conn.mutations.put(null, "k".b(), "v".b()) // unnamed/main DBI always exists
+        val read = conn.readPage(null).entries.first { String(it.key) == "k" }.value
+        assertEquals("v", String(read))
     }
 
     private fun track(f: File): File = f.also { cleanup += it }

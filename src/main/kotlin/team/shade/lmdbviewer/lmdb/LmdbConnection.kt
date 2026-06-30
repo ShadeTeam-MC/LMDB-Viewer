@@ -23,8 +23,12 @@ class LmdbConnection internal constructor(
     val writable: Boolean = false,
 ) : AutoCloseable {
 
+    /** Invoked (off the EDT) when a write grows the map size, with the new size in bytes. */
+    var onMapResized: (Long) -> Unit = {}
+
     /** The write seam for this connection: rejects everything unless [writable]. */
-    val mutations: MutationOps = if (writable) WritableMutationOps(env) else ReadOnlyMutationOps
+    val mutations: MutationOps =
+        if (writable) WritableMutationOps(env) { size -> onMapResized(size) } else ReadOnlyMutationOps
 
     /** Lists the main (unnamed) DBI plus every named DBI, with entry counts. */
     fun listDatabases(): List<DbiInfo> = guarded {

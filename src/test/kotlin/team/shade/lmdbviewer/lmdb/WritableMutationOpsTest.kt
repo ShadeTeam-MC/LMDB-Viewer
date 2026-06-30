@@ -93,6 +93,26 @@ class WritableMutationOpsTest {
         }
     }
 
+    @Test
+    fun writesGrowMapOnMapFull() {
+        val smallDir = TestEnvs.newTempDir()
+        try {
+            val initialMap = 1L shl 20 // 1 MiB
+            TestEnvs.openWritable(smallDir, initialMap).use { conn ->
+                var resizedTo = 0L
+                conn.onMapResized = { resizedTo = it }
+                // ~2 MiB of data into a 1 MiB map: some put hits MDB_MAP_FULL and grows the map.
+                val value = ByteArray(1024) { 'x'.code.toByte() }
+                repeat(2000) { i -> conn.mutations.put(null, "k%05d".format(i).b(), value) }
+
+                assertTrue("map should have grown", resizedTo > initialMap)
+                assertEquals(2000, conn.readPage(null, limit = 5000).entries.size)
+            }
+        } finally {
+            smallDir.deleteRecursively()
+        }
+    }
+
     /** Creates a DUPSORT DBI in [dir] with several values under one key, then closes the env. */
     private fun populateDupsort(dbiName: String, key: String, values: List<String>) {
         Env.create(ByteArrayProxy.PROXY_BA).setMaxDbs(10).setMapSize(8L shl 20).open(dir).use { env ->

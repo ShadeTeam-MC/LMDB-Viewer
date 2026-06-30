@@ -1,6 +1,7 @@
 package team.shade.lmdbviewer.lmdb
 
 import org.lmdbjava.Env
+import org.lmdbjava.LmdbException
 
 /**
  * Write operations against a DBI — the single seam through which the viewer mutates data. An
@@ -29,23 +30,46 @@ object ReadOnlyMutationOps : MutationOps {
  * Mirrors the access-layer invariants used for reads: open the DBI handle *before* the transaction
  * that uses it, and run every lmdbjava call under the plugin classloader (see [ClassLoaderGuard]).
  */
-internal class WritableMutationOps(private val env: Env<ByteArray>) : MutationOps {
+internal class WritableMutationOps(
+    private val env: Env<ByteArray>,
+    private val onMapResized: (Long) -> Unit = {},
+) : MutationOps {
 
     override fun put(dbiName: String?, key: ByteArray, value: ByteArray) = guarded {
-        val dbi = openDbi(dbiName)
-        env.txnWrite().use { txn ->
-            dbi.put(txn, key, value)
-            txn.commit()
+        withGrowth {
+            val dbi = openDbi(dbiName)
+            env.txnWrite().use { txn ->
+                dbi.put(txn, key, value)
+                txn.commit()
+            }
         }
     }
 
     override fun delete(dbiName: String?, key: ByteArray, value: ByteArray?) = guarded {
-        val dbi = openDbi(dbiName)
-        env.txnWrite().use { txn ->
-            // On a non-DUPSORT DBI the data argument is ignored by LMDB; on a DUPSORT DBI passing a
-            // value deletes that specific key/value pair, while null removes every duplicate.
-            if (value == null) dbi.delete(txn, key) else dbi.delete(txn, key, value)
-            txn.commit()
+        withGrowth {
+            val dbi = openDbi(dbiName)
+            env.txnWrite().use { txn ->
+                // On a non-DUPSORT DBI the data argument is ignored by LMDB; on a DUPSORT DBI passing a
+                // value deletes that specific key/value pair, while null removes every duplicate.
+                if (value == null) dbi.delete(txn, key) else dbi.delete(txn, key, value)
+                txn.commit()
+            }
+        }
+    }
+
+    /** Runs [op]; on `MDB_MAP_FULL` grows the map (doubling, up to [MAX_MAP_SIZE]) and retries. */
+    private fun withGrowth(op: () -> Unit) {
+        while (true) {
+            try {
+                op()
+                return
+            } catch (e: Env.MapFullException) {
+                val current = env.info().mapSize
+                val next = (current * 2).coerceAtMost(MAX_MAP_SIZE)
+                if (next <= current) throw LmdbException("The environment is full (map size limit reached).")
+                env.setMapSize(next) // safe only with no open txn — the failed txn already closed
+                onMapResized(next)
+            }
         }
     }
 
@@ -53,4 +77,8 @@ internal class WritableMutationOps(private val env: Env<ByteArray>) : MutationOp
         if (name == null) env.openDbi(null as String?) else env.openDbi(name)
 
     private fun <T> guarded(block: () -> T): T = ClassLoaderGuard.runWithPluginClassLoader(block)
+
+    private companion object {
+        const val MAX_MAP_SIZE = 16L shl 30 // 16 GiB ceiling
+    }
 }
