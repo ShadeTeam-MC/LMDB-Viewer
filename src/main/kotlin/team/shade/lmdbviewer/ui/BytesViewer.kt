@@ -1,6 +1,7 @@
 package team.shade.lmdbviewer.ui
 
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
@@ -40,6 +41,8 @@ class BytesViewer(
             registry.decoders.forEach { add(DecoderChoice.Specific(it)) }
         }
         decoderCombo.model = DefaultComboBoxModel(choices.toTypedArray())
+        // "Auto" shows the currently auto-detected type, e.g. "Auto (HEX)"; specific choices use their name.
+        decoderCombo.renderer = SimpleListCellRenderer.create("") { labelFor(it) }
         decoderCombo.addActionListener { render() }
 
         val copyButton = JButton("Copy").apply {
@@ -66,6 +69,19 @@ class BytesViewer(
         current = bytes
         sizeLabel.text = if (bytes == null) "" else "${bytes.size} B   "
         render()
+        decoderCombo.repaint() // refresh the collapsed "Auto (…)" label for the new bytes
+    }
+
+    /** Combo label for a choice: "Auto"/"Auto (TYPE)" for auto-detect, the decoder name otherwise. */
+    private fun labelFor(choice: DecoderChoice?): String = when (choice) {
+        is DecoderChoice.Specific -> choice.decoder.displayName
+        else -> autoLabel()
+    }
+
+    private fun autoLabel(): String {
+        val bytes = current ?: return "Auto"
+        val detected = registry.autoDetect(bytes) ?: return "Auto"
+        return "Auto (${detected.displayName.uppercase()})"
     }
 
     private fun render() {
