@@ -12,6 +12,14 @@ import org.lmdbjava.LmdbException
 interface MutationOps {
     fun put(dbiName: String?, key: ByteArray, value: ByteArray)
     fun delete(dbiName: String?, key: ByteArray, value: ByteArray?)
+
+    /**
+     * Writes [entries] into [dbiName] as a single unit (used by import). The default falls back to a
+     * [put] per entry; [WritableMutationOps] overrides it to commit the whole batch in one write txn.
+     */
+    fun putBatch(dbiName: String?, entries: List<LmdbEntry>) {
+        entries.forEach { put(dbiName, it.key, it.value) }
+    }
 }
 
 /** Used when the environment is open read-only: mutations are not permitted. */
@@ -20,6 +28,9 @@ object ReadOnlyMutationOps : MutationOps {
         throw UnsupportedOperationException("This LMDB environment is open read-only; enable edit mode to modify it")
 
     override fun delete(dbiName: String?, key: ByteArray, value: ByteArray?): Nothing =
+        throw UnsupportedOperationException("This LMDB environment is open read-only; enable edit mode to modify it")
+
+    override fun putBatch(dbiName: String?, entries: List<LmdbEntry>): Nothing =
         throw UnsupportedOperationException("This LMDB environment is open read-only; enable edit mode to modify it")
 }
 
@@ -52,6 +63,17 @@ internal class WritableMutationOps(
                 // On a non-DUPSORT DBI the data argument is ignored by LMDB; on a DUPSORT DBI passing a
                 // value deletes that specific key/value pair, while null removes every duplicate.
                 if (value == null) dbi.delete(txn, key) else dbi.delete(txn, key, value)
+                txn.commit()
+            }
+        }
+    }
+
+    override fun putBatch(dbiName: String?, entries: List<LmdbEntry>) = guarded {
+        if (entries.isEmpty()) return@guarded
+        withGrowth {
+            val dbi = openDbi(dbiName)
+            env.txnWrite().use { txn ->
+                entries.forEach { dbi.put(txn, it.key, it.value) }
                 txn.commit()
             }
         }

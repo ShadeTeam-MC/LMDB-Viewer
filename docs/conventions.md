@@ -9,7 +9,8 @@ tags: [conventions, packages, boundaries]
 
 * Base package: `team.shade.lmdbviewer`. Plugin id: `team.shade.lmdbviewer`.
 * Only `lmdb/` may import `org.lmdbjava.*`. Only `ui/` may import Swing / `com.intellij.ui.*`.
-* Keep `decode/` free of platform and lmdbjava imports so it stays unit-testable in isolation.
+* Keep `decode/` and `transfer/` free of platform and lmdbjava imports so they stay unit-testable in
+  isolation (`transfer/` may reuse `decode/`'s strict UTF-8 check, but nothing platform-specific).
 
 ## Related
 

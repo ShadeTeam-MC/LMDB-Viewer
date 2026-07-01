@@ -18,6 +18,7 @@ Load only the document relevant to the part of the code you are working on.
 * [Architecture Overview](/architecture/overview.md) - the three layers and their separation rules.
 * [Access Layer](/architecture/access-layer.md) - `lmdb/` package: read-only env access, paging, invariants.
 * [Decode Layer](/architecture/decode-layer.md) - `decode/` package: byte[] to human view.
+* [Transfer Layer](/architecture/transfer-layer.md) - `transfer/` package: export/import file formats.
 * [UI Layer](/architecture/ui-layer.md) - `ui/` package: tool window, tree, table, detail panel.
 * [Native Loading Gotcha](/architecture/native-loading.md) - lmdbjava JNR-FFI / classloader integration risk and its fix.
 * [Decoder Extension Point](/architecture/decoder-extension-point.md) - contract for adding a `ByteDecoder`.

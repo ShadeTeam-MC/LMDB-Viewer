@@ -20,10 +20,13 @@ The **only** place that imports `org.lmdbjava.*`.
   whole DBI into memory and never hold a long-lived read txn across UI interactions — each page
   fetch opens and closes its own short read txn. Reads behave identically on read-only and writable
   envs. `connection.writable` reports the mode; `connection.mutations` is the write seam.
+  `forEachEntry(dbiName, block)` streams **every** entry of a DBI in one read txn (no limit, nothing
+  materialised) — used by export.
 * `MutationOps`: the single write seam. `ReadOnlyMutationOps` rejects every call;
   `WritableMutationOps` (used only on a writable env) runs `put`/`delete` in a short
-  `Env.txnWrite()` and commits. On `MDB_MAP_FULL` it grows the map (`Env.setMapSize`, doubling up to
-  16 GiB) and retries, reporting the new size via `LmdbConnection.onMapResized`. Do not scatter write
+  `Env.txnWrite()` and commits. `putBatch(dbiName, entries)` writes a whole batch in **one** write
+  txn (used by import). On `MDB_MAP_FULL` all writes grow the map (`Env.setMapSize`, doubling up to
+  16 GiB) and retry, reporting the new size via `LmdbConnection.onMapResized`. Do not scatter write
   logic elsewhere. See the [Roadmap](/roadmap.md).
 * Models: `LmdbEntry(key, value, valueSize)`, `EntryPage(entries, nextKey)`, `DbiInfo`,
   `EnvStats`.

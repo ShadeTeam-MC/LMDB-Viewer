@@ -95,6 +95,26 @@ class LmdbConnection internal constructor(
         EntryPage(entries, nextKey)
     }
 
+    /**
+     * Streams every entry of [dbiName] (null = main DBI) to [block], in key order, inside one short
+     * read txn. Unlike [readPage] there is no limit and nothing is materialised into a list — the
+     * caller consumes each [LmdbEntry] as it is produced, so very large DBIs export in bounded memory.
+     *
+     * lmdbjava copies the bytes out of the mmap, so each [LmdbEntry] stays valid after the txn closes.
+     */
+    fun forEachEntry(dbiName: String?, block: (LmdbEntry) -> Unit) = guarded {
+        val dbi = openDbi(dbiName)
+        env.txnRead().use { txn ->
+            dbi.iterate(txn, KeyRange.all()).use { cursor ->
+                val it = cursor.iterator()
+                while (it.hasNext()) {
+                    val kv = it.next()
+                    block(LmdbEntry(kv.key(), kv.`val`()))
+                }
+            }
+        }
+    }
+
     fun stats(): EnvStats = guarded {
         val info = env.info()
         val stat = env.stat()

@@ -28,6 +28,14 @@ the operation. `LmdbConnection.onMapResized` reports the new size, and the `ui/`
 warning balloon (`LMDB map size expanded`). The grow happens after the failed write txn has closed,
 so no transaction is active when `setMapSize` runs.
 
+## Done — export / import
+
+DBI and environment contents can be exported to a file (JSON, NDJSON, or CSV) and JSON/NDJSON
+dumps re-imported in edit mode. The serialization lives in a new platform-free `transfer/` package
+(lossless UTF-8/base64 tagging); the access layer gained `LmdbConnection.forEachEntry` (streaming
+reads) and `MutationOps.putBatch` (one write txn per batch, on the existing seam). See
+[Transfer Layer](/architecture/transfer-layer.md).
+
 ## Next horizons
 
 * **Undo / change history** for the current edit session (capture inverse ops before each write).

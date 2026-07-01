@@ -1,5 +1,23 @@
 # Log
 
+## 2026-07-01 (feat, export/import)
+
+**Export / import.** DBIs and whole environments can be exported to a file and JSON/NDJSON dumps
+re-imported (edit mode). New platform-free `transfer/` package: `TransferFormat` (JSON / NDJSON /
+CSV), `TransferRecord`, `ByteText` (lossless UTF-8/base64 tagging — reuses the decode layer's strict
+UTF-8 check), a dependency-free `Json` escaper + value parser (the decode-layer JSON code only
+re-emits, so import needed its own parser), `EntryExporter` (push-based streaming writer) and
+`EntryImporter` (lazy `Sequence`; NDJSON parsed line-by-line, CSV export-only). Access layer gained
+`LmdbConnection.forEachEntry` (streams a DBI in one read txn, no limit) and `MutationOps.putBatch`
+(one write txn per batch inside the existing `withGrowth` retry; `ReadOnlyMutationOps` rejects it).
+UI adds a tree right-click menu (Export DBI / Export environment / Import into DBI) and an *Import…*
+button in the table actions bar (enabled only in edit mode), using `FileSaverDialog` / `FileChooser`
+on background threads with a success balloon. New tests: `transfer/TransferRoundTripTest`
+(round-trips, encoding choice, CSV escaping, format detection) and `lmdb/LmdbTransferTest`
+(`forEachEntry`, `putBatch`, read-only rejection, end-to-end export→import). New OKF doc
+`architecture/transfer-layer.md`; `features`, `roadmap`, `conventions`, `index`, and the `CLAUDE.md`
+table updated. `pluginVersion` 0.13.0 → 0.14.0 (feat → minor).
+
 ## 2026-07-01 (feat, CBOR)
 
 **CBOR decoder.** Added `decode/CborDecoder.kt` — a dependency-free RFC 8949 reader that renders

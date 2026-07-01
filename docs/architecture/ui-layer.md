@@ -18,7 +18,12 @@ IntelliJ Platform Swing.
   Edit value / Delete (toolbar buttons + table context menu) collect bytes through
   `EntryEditorDialog` (UTF-8/Hex via `ByteCodec`), confirm with `Messages`, then route to
   `connection.mutations` on the pooled thread and refresh the page + DBI counts.
-* Never block the EDT: env open, page fetches, and mutations run on a pooled thread
+* **Export / import**: a tree right-click menu offers *Export DBI…*, *Export environment…* and
+  *Import into DBI…*; an *Import…* button sits in the table actions bar (enabled only in edit mode).
+  Export streams `connection.forEachEntry` into a `transfer/` `EntryExporter` via a `FileSaverDialog`;
+  import reads a JSON/NDJSON file through `EntryImporter` and calls `mutations.putBatch` in batches,
+  then refreshes. See [Transfer Layer](/architecture/transfer-layer.md).
+* Never block the EDT: env open, page fetches, mutations, and export/import all run on a pooled thread
   (`Application.executeOnPooledThread`), results applied via `invokeLater` (the `runBg` helper).
 
 ## Related

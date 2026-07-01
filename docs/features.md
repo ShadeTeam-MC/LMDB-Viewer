@@ -23,6 +23,11 @@ tags: [features, ui, usage]
   (`team.shade.lmdbviewer.byteDecoder`) for binary formats like protobuf / msgpack.
 * Key-prefix search (UTF-8 text, or `0x…` hex) using cursor seek.
 * Environment stats (map size, page size, readers, transaction id, DBI count).
+* **Export / import**: right-click a DBI (or environment) in the tree to export it to a file as
+  **JSON**, **NDJSON** (streamed, for very large databases), or **CSV** (human-readable, export
+  only). In **edit mode**, import a JSON/NDJSON file back into a DBI — records are written in
+  batches. Arbitrary binary keys/values round-trip byte-for-byte (each field is tagged UTF-8 or
+  base64).
 
 # Examples
 

@@ -29,6 +29,7 @@ The full project documentation is an **Open Knowledge Format (OKF v0.1)** bundle
 | [docs/architecture/overview.md](docs/architecture/overview.md) | Orienting across the three layers and their boundaries. |
 | [docs/architecture/access-layer.md](docs/architecture/access-layer.md) | Touching `lmdb/`: env open, paging, the two LMDB invariants. |
 | [docs/architecture/decode-layer.md](docs/architecture/decode-layer.md) | Touching `decode/`: decoders, registry, auto-detect. |
+| [docs/architecture/transfer-layer.md](docs/architecture/transfer-layer.md) | Touching `transfer/`: export/import formats, lossless byte encoding. |
 | [docs/architecture/ui-layer.md](docs/architecture/ui-layer.md) | Touching `ui/`: tool window, tree, table, detail panel, EDT rules. |
 | [docs/architecture/native-loading.md](docs/architecture/native-loading.md) | Debugging lmdbjava native loading / classloader errors. |
 | [docs/architecture/decoder-extension-point.md](docs/architecture/decoder-extension-point.md) | Writing or registering a new `ByteDecoder`. |
