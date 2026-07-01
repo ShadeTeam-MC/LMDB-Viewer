@@ -9,6 +9,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.openapi.util.Key
 import com.intellij.ui.components.JBLabel
@@ -62,9 +63,10 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val statusLabel = JBLabel(" ")
 
     // Edit-mode controls (writable access is opt-in, per environment).
-    private val editModeButton = JToggleButton("Edit mode")
+    // The toggle shows the *current* mode: "Read mode" (green) when read-only, "Edit mode" (red) on.
+    private val editModeButton = JToggleButton("Read mode")
     private val addButton = JButton("Add…")
-    private val editButton = JButton("Edit value…")
+    private val editButton = JButton("Edit")
     private val deleteButton = JButton("Delete")
     private val editPopupItem = JMenuItem("Edit value…")
     private val deletePopupItem = JMenuItem("Delete")
@@ -86,25 +88,28 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     // ---- Layout ---------------------------------------------------------------------------------
 
-    private fun buildToolbar(): JPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 4)).apply {
-        add(JButton("Open Environment…").apply { addActionListener { chooseAndOpen() } })
-        add(JButton("Refresh").apply { addActionListener { refreshSelected() } })
-        add(JButton("Close").apply { addActionListener { closeSelectedEnv() } })
-
-        editModeButton.toolTipText = "Reopen the selected environment for writing so entries can be edited."
-        editModeButton.addActionListener { onToggleEditMode() }
-        add(editModeButton)
-        addButton.apply { toolTipText = "Add a new key/value entry."; addActionListener { addEntry() } }
-        editButton.apply { toolTipText = "Edit the value of the selected entry."; addActionListener { editValue() } }
-        deleteButton.apply { toolTipText = "Delete the selected entry."; addActionListener { deleteEntry() } }
-        add(addButton); add(editButton); add(deleteButton)
-
-        add(JBLabel("   Key prefix:"))
-        searchField.columns = 18
-        searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff)."
-        searchField.addActionListener { applySearch() }
-        add(searchField)
-        add(JButton("Find").apply { addActionListener { applySearch() } })
+    private fun buildToolbar(): JPanel = JPanel(BorderLayout()).apply {
+        // Left-aligned environment/search controls.
+        val left = JPanel(FlowLayout(FlowLayout.LEFT, 4, 4)).apply {
+            add(JButton("Open Environment…").apply { addActionListener { chooseAndOpen() } })
+            add(JButton("Refresh").apply { addActionListener { refreshSelected() } })
+            add(JButton("Close").apply { addActionListener { closeSelectedEnv() } })
+            add(JBLabel("   Key prefix:"))
+            searchField.columns = 18
+            searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff)."
+            searchField.addActionListener { applySearch() }
+            add(searchField)
+            add(JButton("Find").apply { addActionListener { applySearch() } })
+        }
+        // Read/Edit mode toggle, pinned to the right edge.
+        val right = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 4)).apply {
+            editModeButton.toolTipText = "Toggle read-only / edit mode for the selected environment."
+            editModeButton.addActionListener { onToggleEditMode() }
+            add(editModeButton)
+        }
+        add(left, BorderLayout.WEST)
+        add(right, BorderLayout.EAST)
+        updateEditModeButtonAppearance()
     }
 
     private fun buildBody(): OnePixelSplitter {
@@ -112,11 +117,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val tablePanel = JPanel(BorderLayout()).apply {
             add(JBScrollPane(table), BorderLayout.CENTER)
-            add(JPanel(FlowLayout(FlowLayout.LEFT)).apply {
-                loadMoreButton.isEnabled = false
-                loadMoreButton.addActionListener { loadNextPage() }
-                add(loadMoreButton)
-            }, BorderLayout.SOUTH)
+            add(buildTableActionsBar(), BorderLayout.SOUTH)
         }
 
         val rightSplit = OnePixelSplitter(true, 0.5f).apply {
@@ -128,6 +129,18 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             firstComponent = treeScroll
             secondComponent = rightSplit
         }
+    }
+
+    /** The row of entry actions directly under the entries table: Add / Edit / Delete + Load more. */
+    private fun buildTableActionsBar(): JPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 4)).apply {
+        addButton.apply { toolTipText = "Add a new key/value entry."; addActionListener { addEntry() } }
+        editButton.apply { toolTipText = "Edit the value of the selected entry."; addActionListener { editValue() } }
+        deleteButton.apply { toolTipText = "Delete the selected entry."; addActionListener { deleteEntry() } }
+        add(addButton); add(editButton); add(deleteButton)
+
+        loadMoreButton.isEnabled = false
+        loadMoreButton.addActionListener { loadNextPage() }
+        add(loadMoreButton)
     }
 
     private fun buildStatusBar(): JPanel = JPanel(BorderLayout()).apply {
@@ -465,6 +478,21 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         updatingToggle = true
         editModeButton.isSelected = selected
         updatingToggle = false
+        updateEditModeButtonAppearance()
+    }
+
+    /** Reflects the current mode on the toggle: green "Read mode" when off, red "Edit mode" when on. */
+    private fun updateEditModeButtonAppearance() {
+        val editing = editModeButton.isSelected
+        editModeButton.text = if (editing) "Edit mode" else "Read mode"
+        editModeButton.isOpaque = true
+        editModeButton.isFocusPainted = false
+        editModeButton.background = if (editing) EDIT_MODE_COLOR else READ_MODE_COLOR
+        editModeButton.foreground = JBColor.WHITE
+        // IntelliJ's default L&F (FlatLaf) styles buttons itself and ignores setBackground; this makes
+        // the colour actually render. Ignored by non-FlatLaf L&Fs.
+        val hex = if (editing) "DB5860" else "59A869"
+        editModeButton.putClientProperty("FlatLaf.style", "background: #$hex; foreground: #ffffff")
     }
 
     private fun updateEditActions() {
@@ -558,6 +586,10 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     companion object {
         private val PANEL_KEY = Key.create<LmdbViewerPanel>("lmdbViewer.panel")
+
+        // Mode-toggle colours (same in light and dark themes for a clear green=safe / red=writing cue).
+        private val READ_MODE_COLOR = JBColor(0x59A869, 0x59A869) // green — read-only (default)
+        private val EDIT_MODE_COLOR = JBColor(0xDB5860, 0xDB5860) // red — editing enabled
 
         fun register(project: Project, panel: LmdbViewerPanel) = project.putUserData(PANEL_KEY, panel)
 
