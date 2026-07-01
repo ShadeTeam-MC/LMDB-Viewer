@@ -76,5 +76,15 @@ tasks {
             "--add-opens=java.base/java.nio=ALL-UNNAMED",
             "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
         )
+        // The bundled Gradle plugin's JVM-support matrix can't parse "Java 25" on IDE 2024.2 and
+        // throws a (non-fatal) error at sandbox startup. We don't need Gradle integration to test the
+        // plugin, so disable it in the sandbox by listing it in the config's disabled_plugins.txt.
+        doFirst {
+            val type = providers.gradleProperty("platformType").get()
+            val version = providers.gradleProperty("platformVersion").get()
+            val configDir = layout.buildDirectory.dir("idea-sandbox/$type-$version/config").get().asFile
+            configDir.mkdirs()
+            configDir.resolve("disabled_plugins.txt").writeText("com.intellij.gradle\n")
+        }
     }
 }

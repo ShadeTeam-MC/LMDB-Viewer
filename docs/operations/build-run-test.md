@@ -10,11 +10,13 @@ resource: build.gradle.kts
 
 JDK **21** required. Target platform: IntelliJ **2024.2+** (`since-build 242`).
 
-> Note: on a JBR/JDK that reports Java **25**, the `runIde` sandbox (IDE 2024.2) logs a
-> non-fatal `GradleJvmSupportMatrix … IllegalArgumentException: 25` at startup — the IDE and plugin
-> still load. Building against a newer platform (2025.2) would silence it but currently breaks
-> `gradlew test` with IntelliJ Platform Gradle Plugin 2.1.0 (needs plugin 2.17.0 + Gradle 9), so we
-> stay on 2024.2.
+> Note: IDE 2024.2's bundled Gradle plugin can't parse a "Java 25" entry in its JVM-support matrix
+> and throws a non-fatal `GradleJvmSupportMatrix … IllegalArgumentException: 25` at startup. The
+> `runIde` task disables that plugin in the sandbox (`disabled_plugins.txt` — we don't need Gradle
+> integration to test the viewer), which removes the error. Moving to platform 2025.2 would also fix
+> it but currently breaks `gradlew test` with IntelliJ Platform Gradle Plugin 2.1.0 (needs plugin
+> 2.17.0 + Gradle 9), so we stay on 2024.2. If you hit the same error in your **main** IDE (not the
+> sandbox), update IntelliJ IDEA to 2025.x — it's a non-fatal IDE-side issue, unrelated to the plugin.
 
 ```bash
 ./gradlew runIde         # launch a sandbox IDE with the plugin (jvmArgs add --add-opens, see below)
