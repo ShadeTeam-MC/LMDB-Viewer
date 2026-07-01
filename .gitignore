@@ -6,3 +6,7 @@ out/
 .idea/
 !.idea/runConfigurations
 .kotlin/
+
+# Stray LMDB env files that can appear in the repo root from ad-hoc runs.
+/data.mdb
+/lock.mdb
