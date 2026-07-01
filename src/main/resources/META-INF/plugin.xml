@@ -18,6 +18,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>0.10.0 — Edits grow the environment's map size automatically on MDB_MAP_FULL (with a warning).</li>
             <li>0.9.0 — Optional edit mode: add / edit value / delete entries behind an explicit per-environment toggle.</li>
         </ul>
     ]]></change-notes>
