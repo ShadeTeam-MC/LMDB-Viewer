@@ -484,18 +484,19 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     /** Reflects the current mode on the toggle: green "Read mode" when off, red "Edit mode" when on. */
     private fun updateEditModeButtonAppearance() {
         val editing = editModeButton.isSelected
-        editModeButton.text = if (editing) "Edit mode" else "Read mode"
+        val label = if (editing) "Edit mode" else "Read mode"
+        // Force the text colour via HTML so it stays white regardless of how the L&F resolves the
+        // (selected) foreground — that resolution is what kept making the label blend into the fill.
+        editModeButton.text = "<html><b><font color=\"#FFFFFF\">$label</font></b></html>"
         editModeButton.isOpaque = true
         editModeButton.isFocusPainted = false
         editModeButton.background = if (editing) EDIT_MODE_COLOR else READ_MODE_COLOR
-        editModeButton.foreground = JBColor.WHITE
-        // IntelliJ's default L&F (FlatLaf) styles buttons itself and ignores setBackground. Set the
-        // colour for the normal AND selected/pressed states, otherwise the "on" (selected) toggle
-        // keeps FlatLaf's light selected background and the white text becomes unreadable.
+        // FlatLaf (IntelliJ's L&F) paints its own button background; set the fill for every state,
+        // including the selected/pressed states of the toggle.
         val hex = if (editing) "DB5860" else "59A869"
         editModeButton.putClientProperty(
             "FlatLaf.style",
-            "background: #$hex; selectedBackground: #$hex; pressedBackground: #$hex; foreground: #ffffff",
+            "background: #$hex; selectedBackground: #$hex; pressedBackground: #$hex; hoverBackground: #$hex",
         )
     }
 
