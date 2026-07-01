@@ -9,6 +9,7 @@ import com.intellij.util.ui.JBUI
 import team.shade.lmdbviewer.decode.ByteDecoder
 import team.shade.lmdbviewer.decode.DecoderRegistry
 import java.awt.BorderLayout
+import java.awt.Dimension
 import java.awt.Font
 import java.awt.datatransfer.StringSelection
 import javax.swing.DefaultComboBoxModel
@@ -44,6 +45,7 @@ class BytesViewer(
         // "Auto" shows the currently auto-detected type, e.g. "Auto (HEX)"; specific choices use their name.
         decoderCombo.renderer = SimpleListCellRenderer.create("") { labelFor(it) }
         decoderCombo.addActionListener { render() }
+        widenComboToFitLabels()
 
         val copyButton = JButton("Copy").apply {
             addActionListener {
@@ -82,6 +84,23 @@ class BytesViewer(
         val bytes = current ?: return "Auto"
         val detected = registry.autoDetect(bytes) ?: return "Auto"
         return "Auto (${detected.displayName.uppercase()})"
+    }
+
+    /** Sizes the combo to the widest label it can show (incl. "Auto (<TYPE>)"), so nothing is clipped. */
+    private fun widenComboToFitLabels() {
+        val font = decoderCombo.font ?: return
+        val fm = decoderCombo.getFontMetrics(font)
+        val labels = buildList {
+            add("Auto")
+            registry.decoders.forEach {
+                add(it.displayName)
+                add("Auto (${it.displayName.uppercase()})")
+            }
+        }
+        val textWidth = labels.maxOf { fm.stringWidth(it) }
+        // Room for the dropdown arrow + insets.
+        val width = textWidth + JBUI.scale(44)
+        decoderCombo.preferredSize = Dimension(width, decoderCombo.preferredSize.height)
     }
 
     private fun render() {
