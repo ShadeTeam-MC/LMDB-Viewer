@@ -1,5 +1,18 @@
 # Log
 
+## 2026-07-01 (feat, CBOR)
+
+**CBOR decoder.** Added `decode/CborDecoder.kt` — a dependency-free RFC 8949 reader that renders
+binary CBOR values as pretty-printed JSON, registered as a new **CBOR** format in the Value/Key
+panel (`plugin.xml`). Covers the full type set: unsigned/negative integers (widening to `BigInteger`
+past `Long` range), definite + indefinite byte/text strings, arrays, maps (insertion order),
+tags (UUID tag 37 → canonical string, bignum tag 2/3 → number, unknown tags pass through), half/
+single/double floats, booleans, null/undefined, simple values; byte strings shown as `0x…` hex.
+`priority = 70` (below text JSON 80, above Integer 60); `canDecode` is strict (root must be
+array/map/tag and consume every byte) so Auto never grabs plain ints/text. New `CborDecoderTest`
+(round-trips the two real waypoint-marker dumps + per-type cases). Docs (`architecture/decode-layer`)
+updated; `pluginVersion` 0.10.0 → 0.11.0 (feat → minor).
+
 ## 2026-07-01 (feat)
 
 **Automatic map growth.** A write that hits `MDB_MAP_FULL` now grows the environment's map size
