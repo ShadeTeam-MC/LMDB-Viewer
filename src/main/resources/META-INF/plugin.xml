@@ -18,7 +18,7 @@
 
     <change-notes><![CDATA[
         <ul>
-            <li>0.11.0 — New CBOR decoder: binary CBOR (RFC 8949) values are rendered as human-readable JSON (auto-detected).</li>
+            <li>0.13.0 — New CBOR decoder: binary CBOR (RFC 8949) values are rendered as human-readable JSON (auto-detected). The decoder "Auto" option now shows the detected type, and the toolbar / read-edit mode toggle were polished.</li>
             <li>0.10.0 — Edits grow the environment's map size automatically on MDB_MAP_FULL (with a warning).</li>
             <li>0.9.0 — Optional edit mode: add / edit value / delete entries behind an explicit per-environment toggle.</li>
         </ul>
