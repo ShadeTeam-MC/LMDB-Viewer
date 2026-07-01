@@ -9,7 +9,6 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.ui.JBColor
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.openapi.util.Key
 import com.intellij.ui.components.JBLabel
@@ -481,23 +480,14 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         updateEditModeButtonAppearance()
     }
 
-    /** Reflects the current mode on the toggle: green "Read mode" when off, red "Edit mode" when on. */
+    /** Reflects the current mode on the toggle via coloured text: green "Read mode", red "Edit mode". */
     private fun updateEditModeButtonAppearance() {
         val editing = editModeButton.isSelected
         val label = if (editing) "Edit mode" else "Read mode"
-        // Force the text colour via HTML so it stays white regardless of how the L&F resolves the
-        // (selected) foreground — that resolution is what kept making the label blend into the fill.
-        editModeButton.text = "<html><b><font color=\"#FFFFFF\">$label</font></b></html>"
-        editModeButton.isOpaque = true
-        editModeButton.isFocusPainted = false
-        editModeButton.background = if (editing) EDIT_MODE_COLOR else READ_MODE_COLOR
-        // FlatLaf (IntelliJ's L&F) paints its own button background; set the fill for every state,
-        // including the selected/pressed states of the toggle.
-        val hex = if (editing) "DB5860" else "59A869"
-        editModeButton.putClientProperty(
-            "FlatLaf.style",
-            "background: #$hex; selectedBackground: #$hex; pressedBackground: #$hex; hoverBackground: #$hex",
-        )
+        val hex = if (editing) EDIT_MODE_HEX else READ_MODE_HEX
+        // Colour the label (not the button fill); the colour is baked into HTML so the L&F can't
+        // override it (plain setForeground was being ignored for the selected toggle state).
+        editModeButton.text = "<html><b><font color=\"#$hex\">$label</font></b></html>"
     }
 
     private fun updateEditActions() {
@@ -592,9 +582,9 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     companion object {
         private val PANEL_KEY = Key.create<LmdbViewerPanel>("lmdbViewer.panel")
 
-        // Mode-toggle colours (same in light and dark themes for a clear green=safe / red=writing cue).
-        private val READ_MODE_COLOR = JBColor(0x59A869, 0x59A869) // green — read-only (default)
-        private val EDIT_MODE_COLOR = JBColor(0xDB5860, 0xDB5860) // red — editing enabled
+        // Mode-toggle label colours (green = safe read-only, red = writing enabled).
+        private const val READ_MODE_HEX = "59A869" // green — read-only (default)
+        private const val EDIT_MODE_HEX = "DB5860" // red — editing enabled
 
         fun register(project: Project, panel: LmdbViewerPanel) = project.putUserData(PANEL_KEY, panel)
 
