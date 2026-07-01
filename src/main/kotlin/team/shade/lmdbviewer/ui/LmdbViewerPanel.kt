@@ -2,11 +2,17 @@ package team.shade.lmdbviewer.ui
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
+import com.intellij.openapi.fileChooser.FileChooserFactory
+import com.intellij.openapi.fileChooser.FileSaverDescriptor
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.OnePixelSplitter
@@ -20,18 +26,26 @@ import com.intellij.util.ui.JBUI
 import team.shade.lmdbviewer.decode.DecoderRegistry
 import team.shade.lmdbviewer.lmdb.DbiInfo
 import team.shade.lmdbviewer.lmdb.LmdbConnection
+import team.shade.lmdbviewer.lmdb.LmdbEntry
 import team.shade.lmdbviewer.lmdb.LmdbEnvironmentService
 import team.shade.lmdbviewer.settings.RecentEnvironmentsService
+import team.shade.lmdbviewer.transfer.EntryExporter
+import team.shade.lmdbviewer.transfer.EntryImporter
+import team.shade.lmdbviewer.transfer.TransferFormat
+import team.shade.lmdbviewer.transfer.TransferRecord
 import java.awt.BorderLayout
+import java.io.File
 import java.awt.FlowLayout
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.BorderFactory
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JMenuItem
 import javax.swing.JPanel
 import javax.swing.JPopupMenu
 import javax.swing.JToggleButton
+import javax.swing.KeyStroke
 import javax.swing.ListSelectionModel
 import javax.swing.SwingConstants
 import javax.swing.tree.DefaultMutableTreeNode
@@ -67,6 +81,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val addButton = JButton("Add…")
     private val editButton = JButton("Edit")
     private val deleteButton = JButton("Delete")
+    private val importButton = JButton("Import…")
     private val editPopupItem = JMenuItem("Edit value…")
     private val deletePopupItem = JMenuItem("Delete")
     private var updatingToggle = false
@@ -82,7 +97,49 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(buildStatusBar(), BorderLayout.SOUTH)
         configureTree()
         configureTable()
+        registerShortcuts()
         reloadRecentlyOpen()
+    }
+
+    // ---- Keyboard shortcuts ---------------------------------------------------------------------
+
+    /**
+     * Binds keyboard shortcuts, active only while focus is inside this tool window. Ctrl-combinations
+     * and F5 are safe on the whole panel; single keys (Insert/F2/Delete) are scoped to the table so
+     * they don't fire while the user is typing in the search field.
+     */
+    private fun registerShortcuts() {
+        shortcut("control F", this) { focusSearch() }
+        shortcut("F5", this) { refreshSelected() }
+        shortcut("control O", this) { chooseAndOpen() }
+        shortcut("control W", this) { closeSelectedEnv() }
+        shortcut("control E", this) { toggleEditModeFromShortcut() }
+        shortcut("control shift DOWN", this) { if (loadMoreButton.isEnabled) loadNextPage() }
+        shortcut("INSERT", table) { addEntry() }
+        shortcut("F2", table) { editValue() }
+        shortcut("DELETE", table) { deleteEntry() }
+    }
+
+    /** Registers [run] on [component] (and its descendants) for the given [keys] KeyStroke string. */
+    private fun shortcut(keys: String, component: JComponent, run: () -> Unit) {
+        object : DumbAwareAction() {
+            override fun actionPerformed(e: AnActionEvent) = run()
+        }.registerCustomShortcutSet(CustomShortcutSet.fromString(keys), component)
+    }
+
+    private fun focusSearch() {
+        searchField.requestFocusInWindow()
+        searchField.selectAll()
+    }
+
+    /** Flips the edit-mode toggle and runs the normal toggle flow (warning + reopen). */
+    private fun toggleEditModeFromShortcut() {
+        if (selectedConnection() == null) {
+            setStatus("Select an environment first")
+            return
+        }
+        editModeButton.isSelected = !editModeButton.isSelected
+        onToggleEditMode()
     }
 
     // ---- Layout ---------------------------------------------------------------------------------
@@ -90,19 +147,31 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun buildToolbar(): JPanel = JPanel(BorderLayout()).apply {
         // Left-aligned environment/search controls.
         val left = JPanel(FlowLayout(FlowLayout.LEFT, 4, 4)).apply {
-            add(JButton("Open Environment…").apply { addActionListener { chooseAndOpen() } })
-            add(JButton("Refresh").apply { addActionListener { refreshSelected() } })
-            add(JButton("Close").apply { addActionListener { closeSelectedEnv() } })
+            add(JButton("Open Environment…").apply {
+                toolTipText = "Open an LMDB environment — a directory, a data.mdb file, or a single-file .mdb store (Ctrl+O)."
+                addActionListener { chooseAndOpen() }
+            })
+            add(JButton("Refresh").apply {
+                toolTipText = "Reload the selected database from disk (F5)."
+                addActionListener { refreshSelected() }
+            })
+            add(JButton("Close").apply {
+                toolTipText = "Close the selected environment and remove it from the tree (Ctrl+W)."
+                addActionListener { closeSelectedEnv() }
+            })
             add(JBLabel("   Key prefix:"))
             searchField.columns = 18
-            searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff)."
+            searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff). Focus with Ctrl+F."
             searchField.addActionListener { applySearch() }
             add(searchField)
-            add(JButton("Find").apply { addActionListener { applySearch() } })
+            add(JButton("Find").apply {
+                toolTipText = "Apply the key-prefix filter (Enter)."
+                addActionListener { applySearch() }
+            })
         }
         // Read/Edit mode toggle, pinned to the right edge.
         val right = JPanel(FlowLayout(FlowLayout.RIGHT, 4, 4)).apply {
-            editModeButton.toolTipText = "Toggle read-only / edit mode for the selected environment."
+            editModeButton.toolTipText = "Toggle read-only / edit mode for the selected environment (Ctrl+E)."
             editModeButton.addActionListener { onToggleEditMode() }
             add(editModeButton)
         }
@@ -132,12 +201,17 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     /** The row of entry actions directly under the entries table: Add / Edit / Delete + Load more. */
     private fun buildTableActionsBar(): JPanel = JPanel(FlowLayout(FlowLayout.LEFT, 4, 4)).apply {
-        addButton.apply { toolTipText = "Add a new key/value entry."; addActionListener { addEntry() } }
-        editButton.apply { toolTipText = "Edit the value of the selected entry."; addActionListener { editValue() } }
-        deleteButton.apply { toolTipText = "Delete the selected entry."; addActionListener { deleteEntry() } }
-        add(addButton); add(editButton); add(deleteButton)
+        addButton.apply { toolTipText = "Add a new key/value entry (Insert)."; addActionListener { addEntry() } }
+        editButton.apply { toolTipText = "Edit the value of the selected entry (F2)."; addActionListener { editValue() } }
+        deleteButton.apply { toolTipText = "Delete the selected entry (Delete)."; addActionListener { deleteEntry() } }
+        importButton.apply {
+            toolTipText = "Import entries from a JSON/NDJSON file into the selected database (edit mode)."
+            addActionListener { importIntoCurrentDbi() }
+        }
+        add(addButton); add(editButton); add(deleteButton); add(importButton)
 
         loadMoreButton.isEnabled = false
+        loadMoreButton.toolTipText = "Load the next page of entries (Ctrl+Shift+Down)."
         loadMoreButton.addActionListener { loadNextPage() }
         add(loadMoreButton)
     }
@@ -157,6 +231,45 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             val dbi = node.userObject as? DbiNode
             if (dbi != null) selectDbi(dbi) else updateEditActions()
         }
+        configureTreePopup()
+    }
+
+    /** Right-click menu on the tree: export a DBI or the whole environment, and import into a DBI. */
+    private fun configureTreePopup() {
+        val exportDbiItem = JMenuItem("Export DBI…").apply {
+            toolTipText = "Export the selected database to a JSON, NDJSON, or CSV file."
+            addActionListener { exportSelectedDbi() }
+        }
+        val exportEnvItem = JMenuItem("Export environment…").apply {
+            toolTipText = "Export every database in the environment to one file."
+            addActionListener { exportSelectedEnv() }
+        }
+        val importItem = JMenuItem("Import into DBI…").apply {
+            toolTipText = "Import entries from a JSON/NDJSON file into the selected database (edit mode)."
+            addActionListener { importIntoSelectedDbi() }
+        }
+        val popup = JPopupMenu().apply {
+            add(exportDbiItem)
+            add(exportEnvItem)
+            addSeparator()
+            add(importItem)
+        }
+        tree.addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) = maybeShowPopup(e)
+            override fun mouseReleased(e: MouseEvent) = maybeShowPopup(e)
+            private fun maybeShowPopup(e: MouseEvent) {
+                if (!e.isPopupTrigger) return
+                val path = tree.getPathForLocation(e.x, e.y) ?: return
+                tree.selectionPath = path
+                val obj = (path.lastPathComponent as? DefaultMutableTreeNode)?.userObject
+                val dbi = obj as? DbiNode
+                val conn = (obj as? EnvNode)?.connection ?: dbi?.connection
+                exportDbiItem.isEnabled = dbi != null
+                exportEnvItem.isEnabled = conn != null
+                importItem.isEnabled = dbi != null && dbi.connection.writable
+                popup.show(tree, e.x, e.y)
+            }
+        })
     }
 
     private fun configureTable() {
@@ -170,8 +283,16 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val popup = JPopupMenu().apply {
-            editPopupItem.addActionListener { editValue() }
-            deletePopupItem.addActionListener { deleteEntry() }
+            editPopupItem.apply {
+                toolTipText = "Edit the value of the selected entry (F2)."
+                accelerator = KeyStroke.getKeyStroke("F2")
+                addActionListener { editValue() }
+            }
+            deletePopupItem.apply {
+                toolTipText = "Delete the selected entry (Delete)."
+                accelerator = KeyStroke.getKeyStroke("DELETE")
+                addActionListener { deleteEntry() }
+            }
             add(editPopupItem)
             add(deletePopupItem)
         }
@@ -452,6 +573,162 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
 
+    // ---- Export / import ------------------------------------------------------------------------
+
+    private fun selectedNodeObject(): Any? =
+        (tree.lastSelectedPathComponent as? DefaultMutableTreeNode)?.userObject
+
+    private fun exportSelectedDbi() {
+        val dbi = selectedNodeObject() as? DbiNode ?: currentDbi
+        if (dbi == null) { setStatus("Select a database to export"); return }
+        exportDbi(dbi.connection, dbi.info.name, dbi.info.displayName)
+    }
+
+    private fun exportSelectedEnv() {
+        val obj = selectedNodeObject()
+        val conn = (obj as? EnvNode)?.connection ?: (obj as? DbiNode)?.connection ?: currentDbi?.connection
+        if (conn == null) { setStatus("Select an environment to export"); return }
+        exportEnv(conn)
+    }
+
+    private fun importIntoSelectedDbi() {
+        val dbi = selectedNodeObject() as? DbiNode
+        if (dbi == null) { setStatus("Select a database to import into"); return }
+        doImport(dbi.connection, dbi.info.name, dbi.info.displayName)
+    }
+
+    private fun importIntoCurrentDbi() {
+        val dbi = currentDbi
+        if (dbi == null) { setStatus("Select a database to import into"); return }
+        doImport(dbi.connection, dbi.info.name, dbi.info.displayName)
+    }
+
+    /** Streams every entry of one DBI to a file in the chosen format. */
+    private fun exportDbi(conn: LmdbConnection, dbiName: String?, displayName: String) {
+        val format = chooseFormat("Export DBI") ?: return
+        val file = chooseSaveFile("Export DBI — $displayName", "${fileBase(displayName)}.${format.extension}") ?: return
+        setStatus("Exporting $displayName…")
+        runBg(
+            work = {
+                var n = 0L
+                file.bufferedWriter(Charsets.UTF_8).use { w ->
+                    EntryExporter(w, format, includeDb = false).use { exp ->
+                        conn.forEachEntry(dbiName) { e -> exp.write(TransferRecord(null, e.key, e.value)); n++ }
+                    }
+                }
+                n
+            },
+            onSuccess = { n -> exportDone(n, file) },
+            onError = { t -> transferError("export", t) },
+        )
+    }
+
+    /** Streams every DBI of an environment to one file, tagging each record with its DBI name. */
+    private fun exportEnv(conn: LmdbConnection) {
+        val format = chooseFormat("Export Environment") ?: return
+        val file = chooseSaveFile("Export Environment", "${fileBase(envBaseName(conn))}.${format.extension}") ?: return
+        setStatus("Exporting environment…")
+        runBg(
+            work = {
+                var n = 0L
+                val dbis = conn.listDatabases()
+                file.bufferedWriter(Charsets.UTF_8).use { w ->
+                    EntryExporter(w, format, includeDb = true).use { exp ->
+                        dbis.forEach { info ->
+                            conn.forEachEntry(info.name) { e -> exp.write(TransferRecord(info.name, e.key, e.value)); n++ }
+                        }
+                    }
+                }
+                n
+            },
+            onSuccess = { n -> exportDone(n, file) },
+            onError = { t -> transferError("export", t) },
+        )
+    }
+
+    /** Reads a JSON/NDJSON file and writes its records into [dbiName] in batches (edit mode only). */
+    private fun doImport(conn: LmdbConnection, dbiName: String?, displayName: String) {
+        if (!conn.writable) { setStatus("Enable edit mode before importing"); return }
+        val descriptor = FileChooserDescriptor(true, false, false, false, false, false)
+            .withTitle("Import into $displayName")
+            .withDescription("Select a JSON or NDJSON file exported from LMDB Viewer")
+        val vf = FileChooser.chooseFile(descriptor, project, null) ?: return
+        val format = TransferFormat.fromFileName(vf.name)?.takeIf { it.importable }
+            ?: chooseFormat("Import", importOnly = true) ?: return
+        val choice = Messages.showYesNoDialog(
+            project,
+            "Import records from ${vf.name} into $displayName?\n\nExisting keys are overwritten. This cannot be undone.",
+            "Import Into DBI",
+            "Import",
+            "Cancel",
+            Messages.getWarningIcon(),
+        )
+        if (choice != Messages.YES) return
+        setStatus("Importing into $displayName…")
+        runBg(
+            work = {
+                var n = 0L
+                File(vf.path).bufferedReader(Charsets.UTF_8).use { r ->
+                    EntryImporter.read(r, format).chunked(IMPORT_BATCH).forEach { batch ->
+                        conn.mutations.putBatch(dbiName, batch.map { LmdbEntry(it.key, it.value) })
+                        n += batch.size
+                    }
+                }
+                n
+            },
+            onSuccess = { n ->
+                setStatus("Imported $n entr${plural(n)} into $displayName")
+                notifyInfo("Import complete", "$n entr${plural(n)} imported into $displayName")
+                refreshAfterMutation(conn, dbiName)
+            },
+            onError = { t -> transferError("import", t) },
+        )
+    }
+
+    private fun exportDone(n: Long, file: File) {
+        setStatus("Exported $n entr${plural(n)} to ${file.name}")
+        notifyInfo("Export complete", "$n entr${plural(n)} written to ${file.path}")
+    }
+
+    private fun chooseFormat(title: String, importOnly: Boolean = false): TransferFormat? {
+        val formats = TransferFormat.values().filter { !importOnly || it.importable }
+        val names = formats.map { it.name }.toTypedArray()
+        val idx = Messages.showChooseDialog(project, "Choose a format:", title, null, names, names.first())
+        return formats.getOrNull(idx)
+    }
+
+    private fun chooseSaveFile(title: String, defaultName: String): File? {
+        val descriptor = FileSaverDescriptor(title, "Choose where to save the export")
+        val dialog = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
+        return dialog.save(null as VirtualFile?, defaultName)?.file
+    }
+
+    private fun notifyInfo(title: String, message: String) {
+        ApplicationManager.getApplication().invokeLater {
+            NotificationGroupManager.getInstance()
+                .getNotificationGroup("LMDB Viewer")
+                .createNotification(title, message, NotificationType.INFORMATION)
+                .notify(project)
+        }
+    }
+
+    private fun transferError(op: String, t: Throwable) {
+        setStatus("Failed to $op: ${t.message}")
+        Messages.showErrorDialog(
+            project,
+            t.message ?: "Unknown error",
+            "LMDB ${op.replaceFirstChar { it.uppercase() }} Failed",
+        )
+    }
+
+    private fun fileBase(name: String): String =
+        name.ifBlank { "export" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
+
+    private fun envBaseName(conn: LmdbConnection): String =
+        conn.path.substringAfterLast('/').substringAfterLast('\\').ifEmpty { "environment" }
+
+    private fun plural(n: Long): String = if (n == 1L) "y" else "ies"
+
     private fun findEnvNode(path: String): DefaultMutableTreeNode? {
         for (i in 0 until rootNode.childCount) {
             val child = rootNode.getChildAt(i) as DefaultMutableTreeNode
@@ -498,6 +775,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         val writable = currentDbi?.connection?.writable == true
         val hasRow = table.selectedRow >= 0
         addButton.isEnabled = writable
+        importButton.isEnabled = writable
         editButton.isEnabled = writable && hasRow
         deleteButton.isEnabled = writable && hasRow
         editPopupItem.isEnabled = writable && hasRow
@@ -585,6 +863,9 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         // Mode-toggle label colours (green = safe read-only, red = writing enabled).
         private const val READ_MODE_HEX = "59A869" // green — read-only (default)
         private const val EDIT_MODE_HEX = "DB5860" // red — editing enabled
+
+        // Entries written per write txn during import (one commit per batch).
+        private const val IMPORT_BATCH = 1000
 
         fun register(project: Project, panel: LmdbViewerPanel) = project.putUserData(PANEL_KEY, panel)
 

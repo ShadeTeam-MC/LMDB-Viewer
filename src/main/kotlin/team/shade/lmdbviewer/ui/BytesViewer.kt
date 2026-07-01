@@ -1,6 +1,9 @@
 package team.shade.lmdbviewer.ui
 
+import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -45,13 +48,18 @@ class BytesViewer(
         // "Auto" shows the currently auto-detected type, e.g. "Auto (HEX)"; specific choices use their name.
         decoderCombo.renderer = SimpleListCellRenderer.create("") { labelFor(it) }
         decoderCombo.addActionListener { render() }
+        decoderCombo.toolTipText = "Choose how these bytes are decoded; Auto picks the best format."
         widenComboToFitLabels()
 
         val copyButton = JButton("Copy").apply {
-            addActionListener {
-                CopyPasteManager.getInstance().setContents(StringSelection(textArea.text))
-            }
+            toolTipText = "Copy the decoded text to the clipboard (Ctrl+C)."
+            addActionListener { copyToClipboard() }
         }
+
+        // Ctrl+C anywhere in this pane copies the decoded text (or the current selection, if any).
+        object : DumbAwareAction() {
+            override fun actionPerformed(e: AnActionEvent) = copyToClipboard()
+        }.registerCustomShortcutSet(CustomShortcutSet.fromString("control C"), this)
 
         val header = JPanel(BorderLayout()).apply {
             add(JBLabel(title).apply { font = font.deriveFont(Font.BOLD) }, BorderLayout.WEST)
@@ -65,6 +73,12 @@ class BytesViewer(
 
         add(header, BorderLayout.NORTH)
         add(JBScrollPane(textArea), BorderLayout.CENTER)
+    }
+
+    /** Copies the current text selection if there is one, otherwise the whole decoded text. */
+    private fun copyToClipboard() {
+        val text = textArea.selectedText?.takeIf { it.isNotEmpty() } ?: textArea.text
+        CopyPasteManager.getInstance().setContents(StringSelection(text))
     }
 
     fun show(bytes: ByteArray?) {
