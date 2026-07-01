@@ -489,10 +489,14 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         editModeButton.isFocusPainted = false
         editModeButton.background = if (editing) EDIT_MODE_COLOR else READ_MODE_COLOR
         editModeButton.foreground = JBColor.WHITE
-        // IntelliJ's default L&F (FlatLaf) styles buttons itself and ignores setBackground; this makes
-        // the colour actually render. Ignored by non-FlatLaf L&Fs.
+        // IntelliJ's default L&F (FlatLaf) styles buttons itself and ignores setBackground. Set the
+        // colour for the normal AND selected/pressed states, otherwise the "on" (selected) toggle
+        // keeps FlatLaf's light selected background and the white text becomes unreadable.
         val hex = if (editing) "DB5860" else "59A869"
-        editModeButton.putClientProperty("FlatLaf.style", "background: #$hex; foreground: #ffffff")
+        editModeButton.putClientProperty(
+            "FlatLaf.style",
+            "background: #$hex; selectedBackground: #$hex; pressedBackground: #$hex; foreground: #ffffff",
+        )
     }
 
     private fun updateEditActions() {
