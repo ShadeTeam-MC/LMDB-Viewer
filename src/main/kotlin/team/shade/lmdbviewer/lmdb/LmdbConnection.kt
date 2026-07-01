@@ -42,8 +42,19 @@ class LmdbConnection internal constructor(
 
         env.txnRead().use { txn ->
             handles.map { (name, dbi) ->
-                val count = dbi?.let { runCatching { it.stat(txn).entries }.getOrDefault(-1L) } ?: -1L
-                DbiInfo(name = name, entryCount = count, flags = emptySet())
+                val stat = dbi?.let { runCatching { it.stat(txn) }.getOrNull() }
+                val flags = dbi?.let {
+                    runCatching { it.listFlags(txn).map { f -> f.name.removePrefix("MDB_") }.toSet() }.getOrNull()
+                } ?: emptySet()
+                DbiInfo(
+                    name = name,
+                    entryCount = stat?.entries ?: -1L,
+                    flags = flags,
+                    depth = stat?.depth ?: 0,
+                    branchPages = stat?.branchPages ?: 0,
+                    leafPages = stat?.leafPages ?: 0,
+                    overflowPages = stat?.overflowPages ?: 0,
+                )
             }
         }
     }
@@ -129,6 +140,12 @@ class LmdbConnection internal constructor(
             dbiCount = env.dbiNames.size + 1,
         )
     }
+
+    /**
+     * Clears reader-lock slots left behind by processes/threads that died without closing their read
+     * txn, returning how many stale entries were released. Safe to call at any time.
+     */
+    fun checkStaleReaders(): Int = guarded { env.readerCheck() }
 
     private fun openDbi(name: String?): Dbi<ByteArray> =
         if (name == null) env.openDbi(null as String?) else env.openDbi(name)

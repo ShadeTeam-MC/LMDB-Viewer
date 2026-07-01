@@ -1,5 +1,21 @@
 # Log
 
+## 2026-07-02 (feat, diagnostics)
+
+**LMDB diagnostics.** New read-only `LmdbDiagnosticsDialog` (opened from a *Stats…* toolbar button
+or the tree's *Diagnostics…* item): an environment summary (used bytes + map utilization %, page
+size, readers used/max, last txn) and a per-DBI table of B-tree stats (entries, depth,
+branch/leaf/overflow pages, approx. size, flags), plus a *Check stale readers* action wrapping
+`Env.readerCheck`. Access layer: `listDatabases` now captures the full per-DBI `Stat` and reads
+flags via `Dbi.listFlags`, which **fixes a latent bug** — `DbiInfo.flags` was always empty, so
+`isDupSort` and the tree's `[DUPSORT]` marker never showed. `DbiInfo` gained `depth`/`branchPages`/
+`leafPages`/`overflowPages` (+`totalPages`); `EnvStats` gained derived `usedBytes`/
+`utilizationPercent`; new `LmdbConnection.checkStaleReaders()`. Note: lmdbjava 0.9.3 does not expose
+the per-reader lock table (`mdb_reader_list`), so only aggregate readers + stale-reader cleanup are
+available. New `DiagnosticsTest` (DUPSORT-flag regression, per-DBI stats, readerCheck, EnvStats
+getters). Docs (`features`, `architecture/access-layer`, `architecture/ui-layer`) updated.
+`pluginVersion` 0.15.0 → 0.16.0 (feat → minor).
+
 ## 2026-07-01 (feat, export/import)
 
 **Export / import.** DBIs and whole environments can be exported to a file and JSON/NDJSON dumps

@@ -23,8 +23,13 @@ IntelliJ Platform Swing.
   Export streams `connection.forEachEntry` into a `transfer/` `EntryExporter` via a `FileSaverDialog`;
   import reads a JSON/NDJSON file through `EntryImporter` and calls `mutations.putBatch` in batches,
   then refreshes. See [Transfer Layer](/architecture/transfer-layer.md).
-* Never block the EDT: env open, page fetches, mutations, and export/import all run on a pooled thread
-  (`Application.executeOnPooledThread`), results applied via `invokeLater` (the `runBg` helper).
+* **Diagnostics**: a toolbar *Stats…* button and a tree *Diagnostics…* item open
+  `LmdbDiagnosticsDialog` (a `DialogWrapper`) with an environment summary and a per-DBI statistics
+  table, plus a *Check stale readers* action. `openDiagnostics` reads `stats()` + `listDatabases()`
+  off the EDT, then shows the dialog.
+* Never block the EDT: env open, page fetches, mutations, export/import and diagnostics reads all run
+  on a pooled thread (`Application.executeOnPooledThread`), results applied via `invokeLater` (the
+  `runBg` helper).
 
 ## Related
 

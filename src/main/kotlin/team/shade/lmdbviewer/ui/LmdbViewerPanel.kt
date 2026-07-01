@@ -159,6 +159,10 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 toolTipText = "Close the selected environment and remove it from the tree (Ctrl+W)."
                 addActionListener { closeSelectedEnv() }
             })
+            add(JButton("Stats…").apply {
+                toolTipText = "Show environment and per-database statistics (LMDB Diagnostics)."
+                addActionListener { openDiagnostics() }
+            })
             add(JBLabel("   Key prefix:"))
             searchField.columns = 18
             searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff). Focus with Ctrl+F."
@@ -248,11 +252,17 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             toolTipText = "Import entries from a JSON/NDJSON file into the selected database (edit mode)."
             addActionListener { importIntoSelectedDbi() }
         }
+        val diagnosticsItem = JMenuItem("Diagnostics…").apply {
+            toolTipText = "Show environment and per-database statistics."
+            addActionListener { openDiagnostics() }
+        }
         val popup = JPopupMenu().apply {
             add(exportDbiItem)
             add(exportEnvItem)
             addSeparator()
             add(importItem)
+            addSeparator()
+            add(diagnosticsItem)
         }
         tree.addMouseListener(object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) = maybeShowPopup(e)
@@ -267,6 +277,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 exportDbiItem.isEnabled = dbi != null
                 exportEnvItem.isEnabled = conn != null
                 importItem.isEnabled = dbi != null && dbi.connection.writable
+                diagnosticsItem.isEnabled = conn != null
                 popup.show(tree, e.x, e.y)
             }
         })
@@ -682,6 +693,21 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 refreshAfterMutation(conn, dbiName)
             },
             onError = { t -> transferError("import", t) },
+        )
+    }
+
+    /** Reads env + per-DBI stats off the EDT, then opens the diagnostics dialog. */
+    private fun openDiagnostics() {
+        val conn = selectedConnection()
+        if (conn == null) { setStatus("Select an environment first"); return }
+        setStatus("Reading diagnostics…")
+        runBg(
+            work = { conn.stats() to conn.listDatabases() },
+            onSuccess = { (stats, dbis) ->
+                setStatus(" ")
+                LmdbDiagnosticsDialog(project, conn, stats, dbis).show()
+            },
+            onError = { t -> setStatus("Diagnostics failed: ${t.message}") },
         )
     }
 

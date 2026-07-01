@@ -31,15 +31,25 @@ data class EntryPage(
     val hasMore: Boolean get() = nextKey != null
 }
 
-/** Metadata about a named sub-database (DBI) within an environment. */
+/**
+ * Metadata about a named sub-database (DBI) within an environment, including its B-tree statistics
+ * (from `Dbi.stat`) and persistent flags (from `Dbi.listFlags`).
+ */
 data class DbiInfo(
     /** The DBI name, or null for the unnamed/main database. */
     val name: String?,
     val entryCount: Long,
     val flags: Set<String>,
+    val depth: Int = 0,
+    val branchPages: Long = 0,
+    val leafPages: Long = 0,
+    val overflowPages: Long = 0,
 ) {
     val displayName: String get() = name ?: "(main)"
     val isDupSort: Boolean get() = "DUPSORT" in flags
+
+    /** Total B-tree pages backing this DBI (branch + leaf + overflow). */
+    val totalPages: Long get() = branchPages + leafPages + overflowPages
 }
 
 /** Environment-level statistics shown in the info panel. */
@@ -52,4 +62,10 @@ data class EnvStats(
     val lastPageNumber: Long,
     val lastTransactionId: Long,
     val dbiCount: Int,
-)
+) {
+    /** Bytes actually used in the map so far (pages in use × page size). */
+    val usedBytes: Long get() = (lastPageNumber + 1) * pageSize
+
+    /** How full the map is, 0–100 %. */
+    val utilizationPercent: Double get() = if (mapSize > 0) usedBytes * 100.0 / mapSize else 0.0
+}

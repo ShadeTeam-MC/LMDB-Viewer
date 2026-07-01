@@ -23,6 +23,10 @@ tags: [features, ui, usage]
   (`team.shade.lmdbviewer.byteDecoder`) for binary formats like protobuf / msgpack.
 * Key-prefix search (UTF-8 text, or `0x…` hex) using cursor seek.
 * Environment stats (map size, page size, readers, transaction id, DBI count).
+* **Diagnostics dialog** (toolbar *Stats…* or tree ▸ *Diagnostics…*): environment summary (used
+  bytes + map utilization %, page size, readers used/max, last transaction) and a per-database
+  table of B-tree statistics (entries, depth, branch/leaf/overflow pages, approx. size, flags),
+  plus a *Check stale readers* action that releases abandoned reader-lock slots.
 * **Export / import**: right-click a DBI (or environment) in the tree to export it to a file as
   **JSON**, **NDJSON** (streamed, for very large databases), or **CSV** (human-readable, export
   only). In **edit mode**, import a JSON/NDJSON file back into a DBI — records are written in

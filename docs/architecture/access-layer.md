@@ -28,6 +28,11 @@ The **only** place that imports `org.lmdbjava.*`.
   txn (used by import). On `MDB_MAP_FULL` all writes grow the map (`Env.setMapSize`, doubling up to
   16 GiB) and retry, reporting the new size via `LmdbConnection.onMapResized`. Do not scatter write
   logic elsewhere. See the [Roadmap](/roadmap.md).
+* Diagnostics: `listDatabases` populates each `DbiInfo` with the full per-DBI B-tree `Stat`
+  (`depth`, `branchPages`, `leafPages`, `overflowPages`, `entries`) and its persistent flags via
+  `Dbi.listFlags` — so `DbiInfo.isDupSort` (and the tree's `[DUPSORT]` marker) now work. `EnvStats`
+  exposes derived `usedBytes` / `utilizationPercent`. `checkStaleReaders()` wraps `Env.readerCheck`
+  (lmdbjava does not expose the per-reader lock table). Reads run in the same short read txn.
 * Models: `LmdbEntry(key, value, valueSize)`, `EntryPage(entries, nextKey)`, `DbiInfo`,
   `EnvStats`.
 
