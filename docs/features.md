@@ -14,8 +14,10 @@ tags: [features, ui, usage]
 * **Optional edit mode** (opt-in per environment): toggle *Edit mode* in the tool window to reopen
   the environment for writing, then **add**, **edit a value**, or **delete** entries. Each change is
   confirmed via a dialog; key/value bytes are entered as UTF-8 text or hex. Read-only is the safe
-  default — editing removes that safety and writes directly to the database (no undo yet). If a write
-  outgrows the environment's map size, it is grown automatically and a warning balloon is shown.
+  default — editing removes that safety and writes directly to the database. Single edits are
+  **reversible**: an **Undo** button (Ctrl+Z) reverts the last add/edit/delete of the current edit
+  session (import is not undoable and says so). If a write outgrows the environment's map size, it is
+  grown automatically and a warning balloon is shown.
 * Browse named sub-databases (DBIs) with entry counts.
 * Paged entries table with lazy cursor paging ("Load more") — handles very large DBIs without
   loading everything into memory.

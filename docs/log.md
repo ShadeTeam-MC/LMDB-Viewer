@@ -1,5 +1,20 @@
 # Log
 
+## 2026-07-02 (feat, undo)
+
+**Undo for edits.** The top roadmap item: single edits (add / edit value / delete) are now reversible
+within an edit session. New platform-free `lmdb/EditHistory.kt` — a `Mutation` sealed type
+(`Put`/`Delete`) with `applyTo(MutationOps)`, pure `Inverses.forPut/forDelete`, and a bounded LIFO
+`EditHistory`. `LmdbConnection` gained `get(dbiName, key)` (prior-state read) and a per-connection
+`history` (so toggling edit mode — which reopens the env — starts fresh). `LmdbViewerPanel` captures
+the inverse in each edit's `runBg` work (reading prior via `get` for a normal-DBI add) and records it
+on success; a new **Undo** toolbar button + Ctrl+Z (`undoLast`) pop and re-apply the latest inverse,
+then refresh. Import is deliberately not recorded (still warns it cannot be undone). New
+`EditHistoryTest`, `InversesTest` (with a fake `MutationOps`), and `UndoRoundTripTest`
+(`TestEnvs.openWritable`: insert/overwrite/delete round-trips + `get`). Docs (`roadmap` — undo moved
+to Done, `features`, `architecture/access-layer`, `architecture/ui-layer`) updated. `pluginVersion`
+0.18.0 → 0.19.0 (feat → minor).
+
 ## 2026-07-02 (feat, search)
 
 **Search by key/value content.** The prefix-only search grew a mode selector: **Key prefix**

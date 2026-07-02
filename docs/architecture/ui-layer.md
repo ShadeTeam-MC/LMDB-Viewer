@@ -18,7 +18,9 @@ IntelliJ Platform Swing.
   `LmdbEnvironmentService.open(path, writable = true)`; the writable env node is marked `[RW]`. Add /
   Edit value / Delete (toolbar buttons + table context menu) collect bytes through
   `EntryEditorDialog` (UTF-8/Hex via `ByteCodec`), confirm with `Messages`, then route to
-  `connection.mutations` on the pooled thread and refresh the page + DBI counts.
+  `connection.mutations` on the pooled thread and refresh the page + DBI counts. Each edit records
+  its inverse in the connection's `EditHistory`; an **Undo** button (Ctrl+Z) pops and re-applies the
+  latest inverse.
 * **Export / import**: a tree right-click menu offers *Export DBI…*, *Export environment…* and
   *Import into DBI…*; an *Import…* button sits in the table actions bar (enabled only in edit mode).
   Export streams `connection.forEachEntry` into a `transfer/` `EntryExporter` via a `FileSaverDialog`;

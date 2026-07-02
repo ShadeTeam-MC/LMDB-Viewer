@@ -29,8 +29,10 @@ import com.intellij.ui.table.JBTable
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
 import team.shade.lmdbviewer.lmdb.EntryPage
+import team.shade.lmdbviewer.lmdb.Inverses
 import team.shade.lmdbviewer.lmdb.SearchQuery
 import team.shade.lmdbviewer.lmdb.SearchScope
+import team.shade.lmdbviewer.lmdb.applyTo
 import java.awt.datatransfer.StringSelection
 import javax.swing.JComboBox
 import team.shade.lmdbviewer.decode.DecoderRegistry
@@ -92,6 +94,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val addButton = JButton("Add…")
     private val editButton = JButton("Edit")
     private val deleteButton = JButton("Delete")
+    private val undoButton = JButton("Undo")
     private val importButton = JButton("Import…")
     private val editPopupItem = JMenuItem("Edit value…")
     private val deletePopupItem = JMenuItem("Delete")
@@ -130,6 +133,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         shortcut("F2", table) { editValue() }
         shortcut("DELETE", table) { deleteEntry() }
         shortcut("control C", table) { copyValueOfSelected() }
+        shortcut("control Z", table) { undoLast() }
     }
 
     /** Registers [run] on [component] (and its descendants) for the given [keys] KeyStroke string. */
@@ -234,11 +238,16 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         addButton.apply { toolTipText = "Add a new key/value entry (Insert)."; addActionListener { addEntry() } }
         editButton.apply { toolTipText = "Edit the value of the selected entry (F2)."; addActionListener { editValue() } }
         deleteButton.apply { toolTipText = "Delete the selected entry (Delete)."; addActionListener { deleteEntry() } }
+        undoButton.apply {
+            icon = AllIcons.Actions.Undo
+            toolTipText = "Undo the last edit in this session (Ctrl+Z)."
+            addActionListener { undoLast() }
+        }
         importButton.apply {
             toolTipText = "Import entries from a JSON/NDJSON file into the selected database (edit mode)."
             addActionListener { importIntoCurrentDbi() }
         }
-        add(addButton); add(editButton); add(deleteButton); add(importButton)
+        add(addButton); add(editButton); add(deleteButton); add(undoButton); add(importButton)
 
         loadMoreButton.isEnabled = false
         loadMoreButton.toolTipText = "Load the next page of entries (Ctrl+Shift+Down)."
@@ -591,9 +600,20 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!dialog.showAndGet()) return
         val key = dialog.resultKey ?: return
         val value = dialog.resultValue ?: return
+        val dupsort = dbi.info.isDupSort
         runBg(
-            work = { conn.mutations.put(dbi.info.name, key, value) },
-            onSuccess = { setStatus("Added entry"); refreshAfterMutation(conn, dbi.info.name) },
+            work = {
+                // Capture prior state (only meaningful on a non-DUPSORT DBI, where put overwrites).
+                val prior = if (dupsort) null else conn.get(dbi.info.name, key)
+                conn.mutations.put(dbi.info.name, key, value)
+                Inverses.forPut(dbi.info.name, key, value, dupsort, prior)
+            },
+            onSuccess = { inverse ->
+                conn.history.record(inverse)
+                setStatus("Added entry")
+                updateEditActions()
+                refreshAfterMutation(conn, dbi.info.name)
+            },
             onError = { t -> mutationError("add", t) },
         )
     }
@@ -606,9 +626,19 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         val dialog = EntryEditorDialog.forEditValue(project, entry.key, entry.value)
         if (!dialog.showAndGet()) return
         val value = dialog.resultValue ?: return
+        val dupsort = dbi.info.isDupSort
         runBg(
-            work = { conn.mutations.put(dbi.info.name, entry.key, value) },
-            onSuccess = { setStatus("Updated value"); refreshAfterMutation(conn, dbi.info.name) },
+            work = {
+                conn.mutations.put(dbi.info.name, entry.key, value)
+                // The row we edited is the prior value; undo restores it (non-DUPSORT).
+                Inverses.forPut(dbi.info.name, entry.key, value, dupsort, entry.value)
+            },
+            onSuccess = { inverse ->
+                conn.history.record(inverse)
+                setStatus("Updated value")
+                updateEditActions()
+                refreshAfterMutation(conn, dbi.info.name)
+            },
             onError = { t -> mutationError("update", t) },
         )
     }
@@ -628,9 +658,38 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
         if (choice != Messages.YES) return
         runBg(
-            work = { conn.mutations.delete(dbi.info.name, entry.key, entry.value) },
-            onSuccess = { setStatus("Deleted entry"); refreshAfterMutation(conn, dbi.info.name) },
+            work = {
+                conn.mutations.delete(dbi.info.name, entry.key, entry.value)
+                Inverses.forDelete(dbi.info.name, entry.key, entry.value)
+            },
+            onSuccess = { inverse ->
+                conn.history.record(inverse)
+                setStatus("Deleted entry")
+                updateEditActions()
+                refreshAfterMutation(conn, dbi.info.name)
+            },
             onError = { t -> mutationError("delete", t) },
+        )
+    }
+
+    /** Reverts the most recent edit of the current edit session by applying its captured inverse. */
+    private fun undoLast() {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val inverse = conn.history.pop() ?: return
+        runBg(
+            work = { inverse.applyTo(conn.mutations) },
+            onSuccess = {
+                setStatus("Undone — ${conn.history.size} left")
+                updateEditActions()
+                refreshAfterMutation(conn, dbi.info.name)
+            },
+            onError = { t ->
+                conn.history.record(inverse) // the write didn't take effect; keep it undoable
+                updateEditActions()
+                mutationError("undo", t)
+            },
         )
     }
 
@@ -893,6 +952,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         deleteButton.isEnabled = writable && hasRow
         editPopupItem.isEnabled = writable && hasRow
         deletePopupItem.isEnabled = writable && hasRow
+        undoButton.isEnabled = currentDbi?.connection?.let { it.writable && it.history.canUndo } == true
     }
 
     private fun closeSelectedEnv() {

@@ -18,7 +18,8 @@ Editing is implemented behind `MutationOps`, exactly along the planned seam:
   toolbar buttons and a table context menu, each confirmed through `Messages` dialogs.
 * All mutation stays inside the `lmdb/` package; `decode/` is untouched.
 
-This first slice ships **confirmation, not undo**, and edits bytes via a UTF-8 / Hex toggle.
+This first slice shipped **confirmation** and edits bytes via a UTF-8 / Hex toggle; undo followed in
+0.19.0 (see below).
 
 ## Done — automatic map growth
 
@@ -36,11 +37,21 @@ dumps re-imported in edit mode. The serialization lives in a new platform-free `
 reads) and `MutationOps.putBatch` (one write txn per batch, on the existing seam). See
 [Transfer Layer](/architecture/transfer-layer.md).
 
+## Done — undo (0.19.0)
+
+Single edits (add / edit value / delete) are reversible within the current edit session. Each write
+captures its **inverse** as a `Mutation` (`lmdb/EditHistory.kt`): a put on a normal DBI restores the
+prior value read via the new `LmdbConnection.get` (or deletes the key if it was an insert); a put on
+a DUPSORT DBI and a delete invert to removing/re-adding the exact pair. Inverses stack in a bounded
+`EditHistory` bound to the connection, so toggling edit mode starts a fresh history. A toolbar
+**Undo** button and **Ctrl+Z** pop and apply the latest inverse. Import is not recorded (it warns it
+cannot be undone). Redo and a visible history list remain future work.
+
 ## Next horizons
 
-* **Undo / change history** for the current edit session (capture inverse ops before each write).
 * **DUPSORT-aware editing UI** (add/remove individual duplicates from the detail panel).
 * **Rename key** as a first-class action (currently delete + add).
+* **Redo** and a visible change-history list on top of `EditHistory`.
 
 ## Related
 

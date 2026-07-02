@@ -30,6 +30,13 @@ class LmdbConnection internal constructor(
     val mutations: MutationOps =
         if (writable) WritableMutationOps(env) { size -> onMapResized(size) } else ReadOnlyMutationOps
 
+    /**
+     * Undo history for the current edit session (only meaningful on a writable connection). It is
+     * bound to this connection, so toggling edit mode — which closes and reopens the env, yielding a
+     * fresh connection — starts the history over.
+     */
+    val history: EditHistory = EditHistory()
+
     /** Lists the main (unnamed) DBI plus every named DBI, with entry counts. */
     fun listDatabases(): List<DbiInfo> = guarded {
         // A DBI handle must be opened *before* the transaction that reads its stats begins, so open
@@ -104,6 +111,16 @@ class LmdbConnection internal constructor(
             }
         }
         EntryPage(entries, nextKey)
+    }
+
+    /**
+     * Returns the value stored under [key] in [dbiName] (null = main DBI), or null if the key is
+     * absent. On a DUPSORT DBI this returns the first duplicate. Used to capture prior state before
+     * an edit so it can be undone.
+     */
+    fun get(dbiName: String?, key: ByteArray): ByteArray? = guarded {
+        val dbi = openDbi(dbiName)
+        env.txnRead().use { txn -> dbi.get(txn, key) }
     }
 
     /**

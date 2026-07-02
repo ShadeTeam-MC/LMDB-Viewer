@@ -28,6 +28,12 @@ The **only** place that imports `org.lmdbjava.*`.
   order, keeps entries that `SearchQuery.matches`, and sets its continuation token to the last
   **matched** key so *Load more* never repeats or skips a match. `SearchQuery`/`SearchScope` and the
   byte primitives (`ByteSearch.startsWith` / `indexOf`) live in the platform-free `lmdb/` layer.
+* Undo: `LmdbConnection.get(dbiName, key)` reads a single value (prior state for capturing an
+  inverse). `EditHistory` (in `lmdb/EditHistory.kt`) is a bounded LIFO of inverse `Mutation`s bound
+  to the connection, so it resets when edit mode reopens the env. `Inverses.forPut/forDelete` compute
+  the inverse purely (a normal-DBI put restores the prior value or deletes an inserted key; a DUPSORT
+  put and any delete invert to removing/re-adding the exact pair). Applying an inverse goes back
+  through `MutationOps`.
 * `MutationOps`: the single write seam. `ReadOnlyMutationOps` rejects every call;
   `WritableMutationOps` (used only on a writable env) runs `put`/`delete` in a short
   `Env.txnWrite()` and commits. `putBatch(dbiName, entries)` writes a whole batch in **one** write
