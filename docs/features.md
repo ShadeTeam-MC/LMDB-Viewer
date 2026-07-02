@@ -26,7 +26,9 @@ tags: [features, ui, usage]
   (`team.shade.lmdbviewer.byteDecoder`) for binary formats like protobuf / msgpack.
 * Copy an entry from the table: **Ctrl+C** (or right-click ▸ *Copy key* / *Copy value*) copies the
   decoded text to the clipboard.
-* Key-prefix search (UTF-8 text, or `0x…` hex) using cursor seek.
+* Search with a mode selector next to the field: **Key prefix** (fast cursor seek, the default),
+  **Key contains**, or **Value contains** (substring scan of the database). The needle is UTF-8
+  text or `0x…` hex; results page with *Load more* like any listing.
 * Environment stats (map size, page size, readers, transaction id, DBI count).
 * **Diagnostics dialog** (toolbar *Stats…* or tree ▸ *Diagnostics…*): environment summary (used
   bytes + map utilization %, page size, readers used/max, last transaction) and a per-database

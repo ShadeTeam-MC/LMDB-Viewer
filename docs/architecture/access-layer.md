@@ -22,6 +22,12 @@ The **only** place that imports `org.lmdbjava.*`.
   envs. `connection.writable` reports the mode; `connection.mutations` is the write seam.
   `forEachEntry(dbiName, block)` streams **every** entry of a DBI in one read txn (no limit, nothing
   materialised) — used by export.
+* Search: two strategies. **Key prefix** is a *seek* — `readPage(prefix = …)` starts at
+  `KeyRange.atLeast(prefix)` and stops when the prefix no longer matches (cheap). **Content search**
+  (key/value substring) is a *scan* — `scanPage(dbiName, query, afterKey, limit)` iterates in key
+  order, keeps entries that `SearchQuery.matches`, and sets its continuation token to the last
+  **matched** key so *Load more* never repeats or skips a match. `SearchQuery`/`SearchScope` and the
+  byte primitives (`ByteSearch.startsWith` / `indexOf`) live in the platform-free `lmdb/` layer.
 * `MutationOps`: the single write seam. `ReadOnlyMutationOps` rejects every call;
   `WritableMutationOps` (used only on a writable env) runs `put`/`delete` in a short
   `Env.txnWrite()` and commits. `putBatch(dbiName, entries)` writes a whole batch in **one** write

@@ -19,6 +19,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.openapi.util.Key
 import com.intellij.ui.components.JBLabel
@@ -27,7 +28,11 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.table.JBTable
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
+import team.shade.lmdbviewer.lmdb.EntryPage
+import team.shade.lmdbviewer.lmdb.SearchQuery
+import team.shade.lmdbviewer.lmdb.SearchScope
 import java.awt.datatransfer.StringSelection
+import javax.swing.JComboBox
 import team.shade.lmdbviewer.decode.DecoderRegistry
 import team.shade.lmdbviewer.lmdb.DbiInfo
 import team.shade.lmdbviewer.lmdb.LmdbConnection
@@ -77,6 +82,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val detailPanel = DetailPanel(registry)
 
     private val searchField = JBTextField()
+    private val searchScopeCombo = JComboBox(SearchScope.values())
     private val loadMoreButton = JButton("Load more")
     private val statusLabel = JBLabel(" ")
 
@@ -178,13 +184,18 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 toolTipText = "Show environment and per-database statistics (LMDB Diagnostics)."
                 addActionListener { openDiagnostics() }
             })
-            add(JBLabel("   Key prefix:"))
+            add(JBLabel("   Search:"))
             searchField.columns = 18
-            searchField.toolTipText = "Filter by key prefix. Plain text = UTF-8; prefix with 0x for hex (e.g. 0x00ff). Focus with Ctrl+F."
+            searchField.toolTipText = "Search text (UTF-8), or 0x-prefixed hex (e.g. 0x00ff). Focus with Ctrl+F."
             searchField.addActionListener { applySearch() }
             add(searchField)
+            searchScopeCombo.renderer = SimpleListCellRenderer.create("") { scopeLabel(it) }
+            searchScopeCombo.toolTipText =
+                "Key prefix uses a fast seek; Key/Value contains scan the database (can be slow on large ones)."
+            searchScopeCombo.addActionListener { applySearch() }
+            add(searchScopeCombo)
             add(JButton("Find").apply {
-                toolTipText = "Apply the key-prefix filter (Enter)."
+                toolTipText = "Apply the search (Enter)."
                 addActionListener { applySearch() }
             })
         }
@@ -456,18 +467,43 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun loadPage(reset: Boolean) {
         val dbi = currentDbi ?: return
         if (loading) return
+        val needle = parseNeedle(searchField.text)
+        if (needle is Needle.Invalid) {
+            setStatus(needle.message)
+            return
+        }
         loading = true
         loadMoreButton.isEnabled = false
-        val prefix = parsePrefix(searchField.text)
         val after = if (reset) null else nextKey
+        val scope = searchScopeCombo.selectedItem as SearchScope
+        val bytes = (needle as? Needle.Bytes)?.value
+
+        // Content search (key/value contains) scans the DBI; an empty needle or a key-prefix uses the
+        // fast seek path in readPage.
+        val scanning = bytes != null && scope != SearchScope.KEY_PREFIX
+        if (scanning && reset) setStatus("Scanning ${dbi.info.displayName}…")
+
+        val work: () -> EntryPage = when {
+            bytes == null -> { { dbi.connection.readPage(dbi.info.name, afterKey = after) } }
+            scope == SearchScope.KEY_PREFIX ->
+                { { dbi.connection.readPage(dbi.info.name, afterKey = after, prefix = bytes) } }
+            else -> { { dbi.connection.scanPage(dbi.info.name, SearchQuery(scope, bytes), afterKey = after) } }
+        }
 
         runBg(
-            work = { dbi.connection.readPage(dbi.info.name, afterKey = after, prefix = prefix) },
+            work = work,
             onSuccess = { page ->
                 if (reset) tableModel.reset(page.entries) else tableModel.append(page.entries)
                 nextKey = page.nextKey
                 loadMoreButton.isEnabled = page.hasMore
-                setStatus("${dbi.info.displayName}: showing ${tableModel.rowCount} entr${if (tableModel.rowCount == 1) "y" else "ies"}${if (page.hasMore) " (more available)" else ""}")
+                val n = tableModel.rowCount
+                val noun = when {
+                    scanning && n == 1 -> "match"
+                    scanning -> "matches"
+                    n == 1 -> "entry"
+                    else -> "entries"
+                }
+                setStatus("${dbi.info.displayName}: showing $n $noun${if (page.hasMore) " (more available)" else ""}")
                 loading = false
             },
             onError = { t ->
@@ -888,18 +924,34 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     // ---- Helpers --------------------------------------------------------------------------------
 
-    private fun parsePrefix(text: String): ByteArray? {
+    /** Friendly combo label for a search scope. */
+    private fun scopeLabel(scope: SearchScope?): String = when (scope) {
+        SearchScope.KEY_PREFIX -> "Key prefix"
+        SearchScope.KEY_CONTAINS -> "Key contains"
+        SearchScope.VALUE_CONTAINS -> "Value contains"
+        null -> ""
+    }
+
+    /** The parsed search field: no filter, concrete needle bytes, or an input error to show. */
+    private sealed interface Needle {
+        object All : Needle
+        class Bytes(val value: ByteArray) : Needle
+        class Invalid(val message: String) : Needle
+    }
+
+    /** Parses the search field: blank → [Needle.All]; `0x…` → hex bytes; otherwise UTF-8 bytes. */
+    private fun parseNeedle(text: String): Needle {
         val t = text.trim()
-        if (t.isEmpty()) return null
-        return if (t.startsWith("0x", ignoreCase = true)) {
-            val hex = t.substring(2).filter { !it.isWhitespace() }
-            if (hex.length % 2 != 0) return null
-            runCatching {
-                ByteArray(hex.length / 2) { ((hex[it * 2].digitToInt(16) shl 4) or hex[it * 2 + 1].digitToInt(16)).toByte() }
-            }.getOrNull()
-        } else {
-            t.toByteArray(Charsets.UTF_8)
+        if (t.isEmpty()) return Needle.All
+        if (!t.startsWith("0x", ignoreCase = true)) return Needle.Bytes(t.toByteArray(Charsets.UTF_8))
+        val hex = t.substring(2).filter { !it.isWhitespace() }
+        if (hex.isEmpty() || hex.length % 2 != 0) {
+            return Needle.Invalid("Invalid hex: need an even number of digits after 0x")
         }
+        val bytes = runCatching {
+            ByteArray(hex.length / 2) { ((hex[it * 2].digitToInt(16) shl 4) or hex[it * 2 + 1].digitToInt(16)).toByte() }
+        }.getOrNull() ?: return Needle.Invalid("Invalid hex digits after 0x")
+        return Needle.Bytes(bytes)
     }
 
     /** Copies the decoded value of the selected row (Ctrl+C on the table). */

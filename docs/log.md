@@ -1,5 +1,21 @@
 # Log
 
+## 2026-07-02 (feat, search)
+
+**Search by key/value content.** The prefix-only search grew a mode selector: **Key prefix**
+(unchanged fast `KeyRange.atLeast` seek), **Key contains**, and **Value contains** (substring). New
+platform-free `lmdb/SearchQuery.kt` — `SearchScope` enum, `SearchQuery.matches`, and a shared
+`ByteSearch` (`startsWith` moved out of `LmdbConnection`, plus a naive byte `indexOf`). New
+`LmdbConnection.scanPage(dbiName, query, afterKey, limit)` scans in key order and keeps matches up to
+`limit`, with the continuation token set to the last **matched** key so *Load more* never repeats or
+skips a match (same key-bound DUPSORT caveat as `readPage`). UI (`LmdbViewerPanel`): a
+`JComboBox<SearchScope>` next to the field, `parsePrefix` → `parseNeedle` (distinguishes blank vs.
+invalid hex, showing an error in the status bar), and `loadPage` routes prefix→`readPage` /
+contains→`scanPage`; status reports "N match(es)" while scanning. New `SearchQueryTest` and
+`ScanPageTest` (value/key substring, paginated continuity, binary needle, empty result). Docs
+(`features`, `architecture/access-layer`, `architecture/ui-layer`) updated. `pluginVersion`
+0.17.0 → 0.18.0 (feat → minor).
+
 ## 2026-07-02 (feat, usability/polish)
 
 **Recent menu, icons & copy.** Surfaced the already-persisted recent-environments list: a *Recent*

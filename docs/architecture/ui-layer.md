@@ -12,7 +12,8 @@ IntelliJ Platform Swing.
 
 * `LmdbViewerToolWindowFactory` builds the "LMDB Viewer" tool window (right dock).
 * `LmdbViewerPanel`: env/DBI tree (left) + entries table (center, paged via "Load more") +
-  `DetailPanel` (bottom, per-decoder view of selected key & value) + key-prefix search.
+  `DetailPanel` (bottom, per-decoder view of selected key & value) + a search field with a
+  scope selector (Key prefix / Key contains / Value contains).
 * **Edit mode** (opt-in): the *Edit mode* toggle reopens the selected env writable via
   `LmdbEnvironmentService.open(path, writable = true)`; the writable env node is marked `[RW]`. Add /
   Edit value / Delete (toolbar buttons + table context menu) collect bytes through

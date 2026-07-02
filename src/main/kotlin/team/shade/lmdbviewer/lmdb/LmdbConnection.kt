@@ -92,7 +92,7 @@ class LmdbConnection internal constructor(
                 while (it.hasNext()) {
                     val kv = it.next()
                     val key = kv.key()
-                    if (prefix != null && !startsWith(key, prefix)) break
+                    if (prefix != null && !ByteSearch.startsWith(key, prefix)) break
 
                     if (entries.size == limit) {
                         // One extra record exists -> there is another page; remember where to resume.
@@ -100,6 +100,52 @@ class LmdbConnection internal constructor(
                         break
                     }
                     entries += LmdbEntry(key, kv.`val`())
+                }
+            }
+        }
+        EntryPage(entries, nextKey)
+    }
+
+    /**
+     * Reads one page of entries that match [query], scanning in key order from [afterKey].
+     *
+     * Unlike [readPage]'s prefix seek, content search (key/value substring) cannot use a key range,
+     * so this scans entries and keeps the ones [SearchQuery.matches] accepts, up to [limit] matches.
+     * The continuation token ([EntryPage.nextKey]) is the last **matched** key: the next call resumes
+     * with `KeyRange.greaterThan` strictly after it, so no match is shown twice. If the scan reaches
+     * the end before filling a page, `nextKey` is null.
+     *
+     * Notes:
+     * - For a [SearchScope.KEY_PREFIX] query prefer [readPage] (a seek); this scans from the start.
+     * - As with [readPage], continuation is by key. For DUPSORT DBIs, a page boundary that lands
+     *   between duplicates of one key resumes after that whole key, so remaining duplicates of the
+     *   boundary key are not re-examined.
+     */
+    fun scanPage(
+        dbiName: String?,
+        query: SearchQuery,
+        afterKey: ByteArray? = null,
+        limit: Int = DEFAULT_PAGE_SIZE,
+    ): EntryPage = guarded {
+        val dbi = openDbi(dbiName)
+        val range = if (afterKey != null) KeyRange.greaterThan(afterKey) else KeyRange.all()
+
+        val entries = ArrayList<LmdbEntry>(limit)
+        var nextKey: ByteArray? = null
+
+        env.txnRead().use { txn ->
+            dbi.iterate(txn, range).use { cursor ->
+                val it = cursor.iterator()
+                while (it.hasNext()) {
+                    val kv = it.next()
+                    val entry = LmdbEntry(kv.key(), kv.`val`())
+                    if (!query.matches(entry)) continue
+                    entries += entry
+                    if (entries.size == limit) {
+                        // Full page of matches; there may be more, so resume after this last match.
+                        nextKey = entry.key
+                        break
+                    }
                 }
             }
         }
@@ -156,11 +202,5 @@ class LmdbConnection internal constructor(
 
     private companion object {
         const val DEFAULT_PAGE_SIZE = 200
-
-        fun startsWith(value: ByteArray, prefix: ByteArray): Boolean {
-            if (value.size < prefix.size) return false
-            for (i in prefix.indices) if (value[i] != prefix[i]) return false
-            return true
-        }
     }
 }
