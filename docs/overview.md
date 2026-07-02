@@ -1,7 +1,7 @@
 ---
 type: Project Overview
 title: LMDB Viewer
-description: A JetBrains/IntelliJ plugin to browse LMDB data stores directly inside the IDE, read-only in v1.
+description: A JetBrains/IntelliJ plugin to browse and edit LMDB data stores directly inside the IDE, read-only by default.
 tags: [overview, plugin]
 ---
 
@@ -10,9 +10,10 @@ tags: [overview, plugin]
 A JetBrains/IntelliJ plugin that lets developers **browse LMDB (Lightning Memory-Mapped
 Database) data stores** directly inside the IDE, with no separate CLI tooling.
 
-Version 1 is a **read-only** viewer. The data-access layer is intentionally shaped so that
-add/edit/delete (write transactions) can be layered on later without rework — see the
-[Roadmap](/roadmap.md).
+Environments open **read-only by default**. An opt-in **edit mode** (shipped in 0.9.0) reopens
+an environment for writing and enables add/edit/delete behind the `MutationOps` seam — the
+data-access layer was intentionally shaped so write transactions could be layered on without
+rework. See the [Roadmap](/roadmap.md) for what is still planned (undo, DUPSORT editing, rename).
 
 ## Where to go next
 

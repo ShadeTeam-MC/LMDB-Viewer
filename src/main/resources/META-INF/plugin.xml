@@ -18,6 +18,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>0.17.0 — Usability &amp; polish: a Recent menu to reopen recently used environments (dead/missing paths self-clean); a fresh plugin icon and tree icons with greyed-out entry-count / [RW] / [DUPSORT] markers; Ctrl+C and Copy key / Copy value on table rows; clearer status messages on background failures.</li>
             <li>0.16.0 — LMDB diagnostics: a Stats… / Diagnostics… dialog with environment summary (map utilization) and per-database B-tree statistics (entries, depth, page counts, flags), plus a stale-reader check. Fixes the [DUPSORT] marker never appearing in the tree.</li>
             <li>0.15.0 — Keyboard shortcuts and richer tooltips: Ctrl+F (search), F5 (refresh), Ctrl+O/W (open/close), Ctrl+E (edit mode), Insert/F2/Delete (add/edit/delete), Ctrl+Shift+Down (load more), Ctrl+C (copy). Every button and menu now has a descriptive tooltip.</li>
             <li>0.14.0 — Export / import: export a database or the whole environment to JSON, NDJSON, or CSV (right-click in the tree), and import JSON/NDJSON back into a database in edit mode. Binary keys/values round-trip losslessly.</li>
@@ -41,7 +42,7 @@
         <toolWindow
             id="LMDB Viewer"
             anchor="right"
-            icon="AllIcons.Toolwindows.ToolWindowHierarchy"
+            icon="AllIcons.Nodes.DataTables"
             factoryClass="team.shade.lmdbviewer.ui.LmdbViewerToolWindowFactory"/>
 
         <applicationService

@@ -1,5 +1,6 @@
 package team.shade.lmdbviewer.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -10,12 +11,15 @@ import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
 import com.intellij.openapi.fileChooser.FileSaverDescriptor
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.openapi.util.Key
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -23,6 +27,7 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.table.JBTable
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.ui.JBUI
+import java.awt.datatransfer.StringSelection
 import team.shade.lmdbviewer.decode.DecoderRegistry
 import team.shade.lmdbviewer.lmdb.DbiInfo
 import team.shade.lmdbviewer.lmdb.LmdbConnection
@@ -118,6 +123,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         shortcut("INSERT", table) { addEntry() }
         shortcut("F2", table) { editValue() }
         shortcut("DELETE", table) { deleteEntry() }
+        shortcut("control C", table) { copyValueOfSelected() }
     }
 
     /** Registers [run] on [component] (and its descendants) for the given [keys] KeyStroke string. */
@@ -148,18 +154,27 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         // Left-aligned environment/search controls.
         val left = JPanel(FlowLayout(FlowLayout.LEFT, 4, 4)).apply {
             add(JButton("Open Environment…").apply {
+                icon = AllIcons.Actions.MenuOpen
                 toolTipText = "Open an LMDB environment — a directory, a data.mdb file, or a single-file .mdb store (Ctrl+O)."
                 addActionListener { chooseAndOpen() }
             })
+            add(JButton("Recent").apply {
+                icon = AllIcons.Vcs.History
+                toolTipText = "Reopen a recently opened LMDB environment."
+                addActionListener { showRecentMenu(this) }
+            })
             add(JButton("Refresh").apply {
+                icon = AllIcons.Actions.Refresh
                 toolTipText = "Reload the selected database from disk (F5)."
                 addActionListener { refreshSelected() }
             })
             add(JButton("Close").apply {
+                icon = AllIcons.Actions.Close
                 toolTipText = "Close the selected environment and remove it from the tree (Ctrl+W)."
                 addActionListener { closeSelectedEnv() }
             })
             add(JButton("Stats…").apply {
+                icon = AllIcons.Actions.Profile
                 toolTipText = "Show environment and per-database statistics (LMDB Diagnostics)."
                 addActionListener { openDiagnostics() }
             })
@@ -229,6 +244,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun configureTree() {
         tree.isRootVisible = false
         tree.showsRootHandles = true
+        tree.cellRenderer = EnvTreeCellRenderer()
         tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
         tree.addTreeSelectionListener {
             val node = tree.lastSelectedPathComponent as? DefaultMutableTreeNode ?: return@addTreeSelectionListener
@@ -293,6 +309,15 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             updateEditActions()
         }
 
+        val copyKeyItem = JMenuItem("Copy key").apply {
+            toolTipText = "Copy the decoded key to the clipboard."
+            addActionListener { copyDecoded { it.key } }
+        }
+        val copyValueItem = JMenuItem("Copy value").apply {
+            toolTipText = "Copy the decoded value to the clipboard (Ctrl+C)."
+            accelerator = KeyStroke.getKeyStroke("control C")
+            addActionListener { copyValueOfSelected() }
+        }
         val popup = JPopupMenu().apply {
             editPopupItem.apply {
                 toolTipText = "Edit the value of the selected entry (F2)."
@@ -304,6 +329,9 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 accelerator = KeyStroke.getKeyStroke("DELETE")
                 addActionListener { deleteEntry() }
             }
+            add(copyKeyItem)
+            add(copyValueItem)
+            addSeparator()
             add(editPopupItem)
             add(deletePopupItem)
         }
@@ -344,10 +372,33 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 setStatus("Opened ${connection.path} — ${dbis.size} database(s)")
             },
             onError = { t ->
+                // Drop paths that no longer open (moved/deleted/corrupt) so the recent list stays useful.
+                recent.remove(path)
                 setStatus("Failed to open: ${t.message}")
                 Messages.showErrorDialog(project, t.message ?: "Unknown error", "Open LMDB Environment")
             },
         )
+    }
+
+    /** Pops up the list of recently opened environments below [anchor]; opening one reuses [openEnvironment]. */
+    private fun showRecentMenu(anchor: JComponent) {
+        val paths = recent.recentPaths
+        val popup = JPopupMenu()
+        if (paths.isEmpty()) {
+            popup.add(JMenuItem("(no recent environments)").apply { isEnabled = false })
+        } else {
+            paths.forEach { path ->
+                popup.add(JMenuItem(StringUtil.shortenPathWithEllipsis(path, 60)).apply {
+                    toolTipText = path
+                    addActionListener { openEnvironment(path) }
+                })
+            }
+            popup.addSeparator()
+            popup.add(JMenuItem("Clear recent").apply {
+                addActionListener { recent.clear() }
+            })
+        }
+        popup.show(anchor, 0, anchor.height)
     }
 
     private fun reloadRecentlyOpen() {
@@ -356,7 +407,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             runBg(
                 work = { connection.listDatabases() },
                 onSuccess = { dbis -> addEnvNode(connection, dbis) },
-                onError = { },
+                onError = { t -> setStatus("Failed to re-attach ${connection.path}: ${t.message}") },
             )
         }
     }
@@ -555,7 +606,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 addEnvNode(connection, dbis)
                 reselectDbi(connection, dbiName)
             },
-            onError = { },
+            onError = { t -> setStatus("Refresh after write failed: ${t.message}") },
         )
     }
 
@@ -851,6 +902,20 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
 
+    /** Copies the decoded value of the selected row (Ctrl+C on the table). */
+    private fun copyValueOfSelected() = copyDecoded { it.value }
+
+    /** Copies the decoded [pick]ed field (key or value) of the selected row to the clipboard. */
+    private fun copyDecoded(pick: (LmdbEntry) -> ByteArray) {
+        val entry = table.selectedRow.takeIf { it >= 0 }?.let { tableModel.entryAt(it) } ?: return
+        CopyPasteManager.getInstance().setContents(StringSelection(decodedText(pick(entry))))
+    }
+
+    /** Full decoded text of [bytes] using the auto-detected decoder, falling back to a hex preview. */
+    private fun decodedText(bytes: ByteArray): String =
+        registry.autoDetect(bytes)?.let { runCatching { it.decode(bytes).text }.getOrNull() }
+            ?: Previews.preview(bytes)
+
     private fun setStatus(text: String) {
         ApplicationManager.getApplication().invokeLater { statusLabel.text = text }
     }
@@ -868,11 +933,11 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     /** Tree node payloads. */
     private class EnvNode(val connection: LmdbConnection) {
-        override fun toString(): String {
-            val name = connection.path.substringAfterLast('/').substringAfterLast('\\')
+        val name: String
+            get() = connection.path.substringAfterLast('/').substringAfterLast('\\')
                 .ifEmpty { connection.path }
-            return if (connection.writable) "$name  [RW]" else name
-        }
+
+        override fun toString(): String = if (connection.writable) "$name  [RW]" else name
     }
 
     private class DbiNode(val connection: LmdbConnection, val info: DbiInfo) {
@@ -880,6 +945,39 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             val count = if (info.entryCount >= 0) " (${info.entryCount})" else ""
             val dup = if (info.isDupSort) " [DUPSORT]" else ""
             return "${info.displayName}$count$dup"
+        }
+    }
+
+    /**
+     * Renders environment/DBI tree nodes with icons and greyed-out markers (entry count, [RW],
+     * [DUPSORT]) so the database name itself stays clean and readable.
+     */
+    private class EnvTreeCellRenderer : ColoredTreeCellRenderer() {
+        override fun customizeCellRenderer(
+            tree: javax.swing.JTree,
+            value: Any?,
+            selected: Boolean,
+            expanded: Boolean,
+            leaf: Boolean,
+            row: Int,
+            hasFocus: Boolean,
+        ) {
+            when (val obj = (value as? DefaultMutableTreeNode)?.userObject) {
+                is EnvNode -> {
+                    icon = AllIcons.Nodes.Folder
+                    append(obj.name)
+                    if (obj.connection.writable) append("  [RW]", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                }
+                is DbiNode -> {
+                    icon = AllIcons.Nodes.DataTables
+                    append(obj.info.displayName)
+                    if (obj.info.entryCount >= 0) {
+                        append(" (${obj.info.entryCount})", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                    }
+                    if (obj.info.isDupSort) append(" [DUPSORT]", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                }
+                else -> append(obj?.toString() ?: "")
+            }
         }
     }
 

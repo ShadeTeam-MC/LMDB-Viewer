@@ -9,6 +9,8 @@ tags: [features, ui, usage]
 
 * Open an LMDB environment: a directory (`data.mdb` + `lock.mdb`), a `data.mdb` file, or a
   single-file `*.mdb` store (`MDB_NOSUBDIR`). Opened **read-only** by default (`MDB_RDONLY_ENV`).
+  A toolbar **Recent** menu reopens recently used environments (paths that no longer open are
+  dropped from the list; *Clear recent* empties it).
 * **Optional edit mode** (opt-in per environment): toggle *Edit mode* in the tool window to reopen
   the environment for writing, then **add**, **edit a value**, or **delete** entries. Each change is
   confirmed via a dialog; key/value bytes are entered as UTF-8 text or hex. Read-only is the safe
@@ -18,9 +20,12 @@ tags: [features, ui, usage]
 * Paged entries table with lazy cursor paging ("Load more") — handles very large DBIs without
   loading everything into memory.
 * Decode opaque byte keys/values: **hex dump**, **UTF-8/ASCII**, auto-detected **JSON**
-  (pretty-printed), and **integers** (int8/16/32/64 × little/big endian, signed + unsigned).
+  (pretty-printed), **CBOR** (RFC 8949, rendered as JSON), and **integers** (int8/16/32/64 ×
+  little/big endian, signed + unsigned).
 * Per-pane decoder override, plus a pluggable decoder **extension point**
   (`team.shade.lmdbviewer.byteDecoder`) for binary formats like protobuf / msgpack.
+* Copy an entry from the table: **Ctrl+C** (or right-click ▸ *Copy key* / *Copy value*) copies the
+  decoded text to the clipboard.
 * Key-prefix search (UTF-8 text, or `0x…` hex) using cursor seek.
 * Environment stats (map size, page size, readers, transaction id, DBI count).
 * **Diagnostics dialog** (toolbar *Stats…* or tree ▸ *Diagnostics…*): environment summary (used

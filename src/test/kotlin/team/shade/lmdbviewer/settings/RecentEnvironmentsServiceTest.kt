@@ -39,6 +39,15 @@ class RecentEnvironmentsServiceTest {
     }
 
     @Test
+    fun clearEmptiesTheList() {
+        val svc = RecentEnvironmentsService()
+        svc.add("/a")
+        svc.add("/b")
+        svc.clear()
+        assertEquals(emptyList<String>(), svc.recentPaths)
+    }
+
+    @Test
     fun loadStateRestoresPersistedPaths() {
         val loaded = RecentEnvironmentsService.State().apply {
             recentPaths = mutableListOf("/x", "/y")

@@ -1,5 +1,26 @@
 # Log
 
+## 2026-07-02 (feat, usability/polish)
+
+**Recent menu, icons & copy.** Surfaced the already-persisted recent-environments list: a *Recent*
+toolbar button opens a menu of recently used environments (`RecentEnvironmentsService.recentPaths`),
+each reopening via `openEnvironment`; a failed open now self-cleans the path (`recent.remove`), and a
+*Clear recent* item wipes the list (new `RecentEnvironmentsService.clear()`). Added a custom
+`pluginIcon.svg`/`pluginIcon_dark.svg` (database + lightning bolt) and switched the tool-window icon
+off the borrowed hierarchy icon; the tree now uses a `ColoredTreeCellRenderer` with node icons and
+greyed-out `(count)` / `[RW]` / `[DUPSORT]` markers. Table rows gained Ctrl+C and *Copy key* / *Copy
+value* (decoded via the auto-detected decoder). Polish: the previously silent `onError {}` in
+`reloadRecentlyOpen` and `refreshAfterMutation` now report to the status bar. New
+`RecentEnvironmentsServiceTest.clearEmptiesTheList`. Docs (`overview`, `features`) updated;
+`pluginVersion` 0.16.0 → 0.17.0 (feat → minor).
+
+## 2026-07-02 (feat, shortcuts)
+
+**Keyboard shortcuts & tooltips.** Bound tool-window shortcuts (Ctrl+F search, F5 refresh, Ctrl+O/W
+open/close, Ctrl+E edit mode, Ctrl+Shift+Down load more, Insert/F2/Delete add/edit/delete) and gave
+every toolbar button, menu item and the search field a descriptive tooltip. `pluginVersion`
+0.14.0 → 0.15.0 (feat → minor).
+
 ## 2026-07-02 (feat, diagnostics)
 
 **LMDB diagnostics.** New read-only `LmdbDiagnosticsDialog` (opened from a *Stats…* toolbar button

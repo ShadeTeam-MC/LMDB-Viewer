@@ -41,6 +41,10 @@ class RecentEnvironmentsService : PersistentStateComponent<RecentEnvironmentsSer
         state.recentPaths.remove(path)
     }
 
+    fun clear() {
+        state.recentPaths.clear()
+    }
+
     private companion object {
         const val MAX_RECENT = 15
     }
