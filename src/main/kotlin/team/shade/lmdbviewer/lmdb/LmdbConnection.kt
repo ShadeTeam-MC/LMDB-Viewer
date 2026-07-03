@@ -124,6 +124,26 @@ class LmdbConnection internal constructor(
     }
 
     /**
+     * Returns every value stored under [key] in [dbiName] (null = main DBI), up to [limit]. On a
+     * DUPSORT DBI a key can hold many values (sorted); on a normal DBI this returns 0 or 1. Used by
+     * the detail panel to list a key's duplicates.
+     */
+    fun getDuplicates(dbiName: String?, key: ByteArray, limit: Int = DEFAULT_DUP_LIMIT): List<ByteArray> = guarded {
+        val dbi = openDbi(dbiName)
+        val values = ArrayList<ByteArray>()
+        env.txnRead().use { txn ->
+            dbi.iterate(txn, KeyRange.closed(key, key)).use { cursor ->
+                val it = cursor.iterator()
+                while (it.hasNext() && values.size < limit) {
+                    val kv = it.next()
+                    if (kv.key().contentEquals(key)) values += kv.`val`()
+                }
+            }
+        }
+        values
+    }
+
+    /**
      * Reads one page of entries that match [query], scanning in key order from [afterKey].
      *
      * Unlike [readPage]'s prefix seek, content search (key/value substring) cannot use a key range,
@@ -219,5 +239,6 @@ class LmdbConnection internal constructor(
 
     private companion object {
         const val DEFAULT_PAGE_SIZE = 200
+        const val DEFAULT_DUP_LIMIT = 500
     }
 }

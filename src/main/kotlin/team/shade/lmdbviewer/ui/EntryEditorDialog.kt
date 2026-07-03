@@ -134,5 +134,15 @@ internal class EntryEditorDialog private constructor(
             keyDisplay = ByteCodec.format(key, ByteCodec.defaultMode(key)),
             valueInput = BytesInput("Value:", value),
         )
+
+        /** Adds another value under an existing (DUPSORT) key: key read-only, value blank. */
+        fun forAddValue(project: Project, key: ByteArray): EntryEditorDialog = EntryEditorDialog(
+            project,
+            dialogTitle = "Add Duplicate Value",
+            keyInput = null,
+            fixedKey = key,
+            keyDisplay = ByteCodec.format(key, ByteCodec.defaultMode(key)),
+            valueInput = BytesInput("Value:", null),
+        )
     }
 }

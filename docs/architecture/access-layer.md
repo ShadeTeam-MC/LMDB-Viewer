@@ -30,10 +30,14 @@ The **only** place that imports `org.lmdbjava.*`.
   byte primitives (`ByteSearch.startsWith` / `indexOf`) live in the platform-free `lmdb/` layer.
 * Undo: `LmdbConnection.get(dbiName, key)` reads a single value (prior state for capturing an
   inverse). `EditHistory` (in `lmdb/EditHistory.kt`) is a bounded LIFO of inverse `Mutation`s bound
-  to the connection, so it resets when edit mode reopens the env. `Inverses.forPut/forDelete` compute
-  the inverse purely (a normal-DBI put restores the prior value or deletes an inserted key; a DUPSORT
-  put and any delete invert to removing/re-adding the exact pair). Applying an inverse goes back
-  through `MutationOps`.
+  to the connection, so it resets when edit mode reopens the env. `Inverses.forPut/forDelete/forReplace`
+  compute the inverse purely (a normal-DBI put restores the prior value or deletes an inserted key; a
+  DUPSORT put and any delete invert to removing/re-adding the exact pair; a replace inverts by
+  swapping direction). Applying an inverse goes back through `MutationOps`.
+* DUPSORT editing: `LmdbConnection.getDuplicates(dbiName, key, limit)` returns every value of a key
+  (`KeyRange.closed(key, key)`), for the detail panel's value list. `MutationOps.replace(dbiName, key,
+  oldValue, newValue)` edits a single duplicate atomically — `WritableMutationOps` deletes the old
+  pair and puts the new one in **one** write txn (a plain put would add a second value on DUPSORT).
 * `MutationOps`: the single write seam. `ReadOnlyMutationOps` rejects every call;
   `WritableMutationOps` (used only on a writable env) runs `put`/`delete` in a short
   `Env.txnWrite()` and commits. `putBatch(dbiName, entries)` writes a whole batch in **one** write

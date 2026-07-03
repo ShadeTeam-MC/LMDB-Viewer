@@ -50,6 +50,21 @@ internal object TestEnvs {
         }
     }
 
+    /**
+     * Creates a DUPSORT DBI [dbiName] in [dir] where each key maps to several values, then closes the
+     * env so it can be reopened. Values for a key are written in the given order (LMDB stores them
+     * sorted).
+     */
+    fun populateDupSort(dir: File, dbiName: String, entries: Map<String, List<String>>) {
+        Env.create(ByteArrayProxy.PROXY_BA).setMaxDbs(MAX_DBS).setMapSize(MAP_SIZE).open(dir).use { env ->
+            val dbi = env.openDbi(dbiName, DbiFlags.MDB_CREATE, DbiFlags.MDB_DUPSORT)
+            env.txnWrite().use { txn ->
+                entries.forEach { (k, values) -> values.forEach { v -> dbi.put(txn, k.b(), v.b()) } }
+                txn.commit()
+            }
+        }
+    }
+
     /** Single-file environment variant: opens [file] with `MDB_NOSUBDIR`, writes [entries], closes. */
     fun populateSingleFile(file: File, dbiName: String, entries: Map<String, String>) {
         Env.create(ByteArrayProxy.PROXY_BA).setMaxDbs(MAX_DBS).setMapSize(MAP_SIZE)

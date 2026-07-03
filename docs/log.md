@@ -1,5 +1,22 @@
 # Log
 
+## 2026-07-02 (feat, dupsort-editing)
+
+**DUPSORT value editing.** Multi-value keys can now be edited value-by-value, and a long-standing bug
+is fixed: editing a value on a DUPSORT DBI used `put`, which *adds* a duplicate rather than replacing
+one. New atomic `MutationOps.replace(dbiName, key, oldValue, newValue)` (`WritableMutationOps` does
+delete+put in one write txn; `ReadOnlyMutationOps` rejects; default = delete then put) and
+`LmdbConnection.getDuplicates(dbiName, key, limit)` (all values of a key via `KeyRange.closed`).
+`EditHistory` gained `Mutation.Replace` + `Inverses.forReplace` (undo swaps direction). UI: new
+`DuplicatesPanel` (a `JBList` of the key's values with Add / Edit / Remove) hosted in `DetailPanel`
+below the key/value viewers via a vertical splitter, shown only for DUPSORT; `EntryEditorDialog.forAddValue`;
+`LmdbViewerPanel` unifies value edits through `applyValueEdit` (DUPSORT → `replace`, else `put`),
+wires add/edit/remove + `reloadDuplicatesFor`, and refreshes the list after edits/undo. `TestEnvs`
+gained `populateDupSort`; new `DuplicatesTest` (getDuplicates ordering/limit, replace on DUPSORT vs
+normal, read-only rejection), plus `Replace` cases in `InversesTest`/`UndoRoundTripTest`. Docs
+(`features`, `roadmap` — DUPSORT editing → Done, `architecture/access-layer`, `architecture/ui-layer`)
+updated. `pluginVersion` 0.19.0 → 0.20.0 (feat → minor).
+
 ## 2026-07-02 (feat, undo)
 
 **Undo for edits.** The top roadmap item: single edits (add / edit value / delete) are now reversible

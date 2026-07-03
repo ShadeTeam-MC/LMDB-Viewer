@@ -21,6 +21,10 @@ IntelliJ Platform Swing.
   `connection.mutations` on the pooled thread and refresh the page + DBI counts. Each edit records
   its inverse in the connection's `EditHistory`; an **Undo** button (Ctrl+Z) pops and re-applies the
   latest inverse.
+* **DUPSORT values**: when a DUPSORT key is selected, `DetailPanel` shows a `DuplicatesPanel` (below
+  the key/value viewers) listing every value of that key via `LmdbConnection.getDuplicates`, with
+  Add / Edit / Remove. Editing routes through `applyValueEdit`, which uses `mutations.replace` (atomic
+  delete+put) on DUPSORT so only the chosen duplicate changes; each action records its inverse.
 * **Export / import**: a tree right-click menu offers *Export DBI…*, *Export environment…* and
   *Import into DBI…*; an *Import…* button sits in the table actions bar (enabled only in edit mode).
   Export streams `connection.forEachEntry` into a `transfer/` `EntryExporter` via a `FileSaverDialog`;

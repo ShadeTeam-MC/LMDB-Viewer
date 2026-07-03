@@ -19,6 +19,8 @@ tags: [features, ui, usage]
   session (import is not undoable and says so). If a write outgrows the environment's map size, it is
   grown automatically and a warning balloon is shown.
 * Browse named sub-databases (DBIs) with entry counts.
+* **DUPSORT keys** (a key with many values): the detail panel lists every value of the selected key,
+  with **Add / Edit / Remove** for individual values. Editing a value replaces just that duplicate.
 * Paged entries table with lazy cursor paging ("Load more") — handles very large DBIs without
   loading everything into memory.
 * Decode opaque byte keys/values: **hex dump**, **UTF-8/ASCII**, auto-detected **JSON**

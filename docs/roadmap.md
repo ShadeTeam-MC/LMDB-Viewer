@@ -47,9 +47,16 @@ a DUPSORT DBI and a delete invert to removing/re-adding the exact pair. Inverses
 **Undo** button and **Ctrl+Z** pop and apply the latest inverse. Import is not recorded (it warns it
 cannot be undone). Redo and a visible history list remain future work.
 
+## Done — DUPSORT editing (0.20.0)
+
+Multi-value (DUPSORT) keys can be edited value-by-value. `LmdbConnection.getDuplicates` lists every
+value of a key; a new `DuplicatesPanel` in the detail area shows them with Add / Edit / Remove.
+Editing one value uses the new atomic `MutationOps.replace` (delete old pair + put new pair in one
+write txn) instead of a plain put, which on DUPSORT would have *added* a second value. Every action
+records its inverse (`Mutation.Replace` for edits), so undo works.
+
 ## Next horizons
 
-* **DUPSORT-aware editing UI** (add/remove individual duplicates from the detail panel).
 * **Rename key** as a first-class action (currently delete + add).
 * **Redo** and a visible change-history list on top of `EditHistory`.
 

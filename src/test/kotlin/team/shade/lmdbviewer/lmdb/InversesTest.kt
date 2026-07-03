@@ -33,16 +33,24 @@ class InversesTest {
     }
 
     @Test
+    fun replaceInvertsBySwappingDirection() {
+        val inv = Inverses.forReplace("db", "k".b(), "old".b(), "new".b())
+        assertEquals(Mutation.Replace("db", "k".b(), "new".b(), "old".b()), inv)
+    }
+
+    @Test
     fun applyToDispatchesToOps() {
         val ops = RecordingOps()
         Mutation.Put("db", "k".b(), "v".b()).applyTo(ops)
         Mutation.Delete("db", "k".b(), null).applyTo(ops)
         Mutation.Delete("db", "k".b(), "dup".b()).applyTo(ops)
+        Mutation.Replace("db", "k".b(), "old".b(), "new".b()).applyTo(ops)
         assertEquals(
             listOf(
                 "put db k v",
                 "delete db k null",
                 "delete db k dup",
+                "replace db k old new",
             ),
             ops.calls,
         )
@@ -57,6 +65,10 @@ class InversesTest {
 
         override fun delete(dbiName: String?, key: ByteArray, value: ByteArray?) {
             calls += "delete $dbiName ${String(key)} ${value?.let { String(it) } ?: "null"}"
+        }
+
+        override fun replace(dbiName: String?, key: ByteArray, oldValue: ByteArray, newValue: ByteArray) {
+            calls += "replace $dbiName ${String(key)} ${String(oldValue)} ${String(newValue)}"
         }
     }
 }

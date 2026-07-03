@@ -2,6 +2,7 @@ package team.shade.lmdbviewer.lmdb
 
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -66,5 +67,17 @@ class UndoRoundTripTest {
         assertNull(c.get("db", "k".b()))
         Inverses.forDelete("db", "k".b(), "v".b()).applyTo(c.mutations)
         assertArrayEquals("v".b(), c.get("db", "k".b()))
+    }
+
+    @Test
+    fun undoOfDupSortReplaceRestoresPairLeavingOthers() {
+        dir.deleteRecursively(); dir = TestEnvs.newTempDir()
+        TestEnvs.populateDupSort(dir, "db", mapOf("k" to listOf("a", "b", "c")))
+        conn = TestEnvs.openWritable(dir)
+        val c = conn!!
+        c.mutations.replace("db", "k".b(), "b".b(), "z".b())
+        assertEquals(listOf("a", "c", "z"), c.getDuplicates("db", "k".b()).map { String(it) })
+        Inverses.forReplace("db", "k".b(), "b".b(), "z".b()).applyTo(c.mutations)
+        assertEquals(listOf("a", "b", "c"), c.getDuplicates("db", "k".b()).map { String(it) })
     }
 }

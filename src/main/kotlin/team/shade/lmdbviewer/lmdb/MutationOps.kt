@@ -14,6 +14,17 @@ interface MutationOps {
     fun delete(dbiName: String?, key: ByteArray, value: ByteArray?)
 
     /**
+     * Replaces the pair (`key`, [oldValue]) with (`key`, [newValue]). On a DUPSORT DBI a plain [put]
+     * would *add* a second value instead of editing one, so this deletes the old pair and puts the
+     * new one. The default runs the two steps separately; [WritableMutationOps] overrides it to do
+     * both in one write txn (atomic). On a non-DUPSORT DBI it is equivalent to `put(key, newValue)`.
+     */
+    fun replace(dbiName: String?, key: ByteArray, oldValue: ByteArray, newValue: ByteArray) {
+        delete(dbiName, key, oldValue)
+        put(dbiName, key, newValue)
+    }
+
+    /**
      * Writes [entries] into [dbiName] as a single unit (used by import). The default falls back to a
      * [put] per entry; [WritableMutationOps] overrides it to commit the whole batch in one write txn.
      */
@@ -28,6 +39,9 @@ object ReadOnlyMutationOps : MutationOps {
         throw UnsupportedOperationException("This LMDB environment is open read-only; enable edit mode to modify it")
 
     override fun delete(dbiName: String?, key: ByteArray, value: ByteArray?): Nothing =
+        throw UnsupportedOperationException("This LMDB environment is open read-only; enable edit mode to modify it")
+
+    override fun replace(dbiName: String?, key: ByteArray, oldValue: ByteArray, newValue: ByteArray): Nothing =
         throw UnsupportedOperationException("This LMDB environment is open read-only; enable edit mode to modify it")
 
     override fun putBatch(dbiName: String?, entries: List<LmdbEntry>): Nothing =
@@ -63,6 +77,19 @@ internal class WritableMutationOps(
                 // On a non-DUPSORT DBI the data argument is ignored by LMDB; on a DUPSORT DBI passing a
                 // value deletes that specific key/value pair, while null removes every duplicate.
                 if (value == null) dbi.delete(txn, key) else dbi.delete(txn, key, value)
+                txn.commit()
+            }
+        }
+    }
+
+    override fun replace(dbiName: String?, key: ByteArray, oldValue: ByteArray, newValue: ByteArray) = guarded {
+        withGrowth {
+            val dbi = openDbi(dbiName)
+            env.txnWrite().use { txn ->
+                // Atomic edit of one pair: drop the old value, add the new one. On DUPSORT this edits a
+                // single duplicate; on a normal DBI it is equivalent to overwriting the key.
+                dbi.delete(txn, key, oldValue)
+                dbi.put(txn, key, newValue)
                 txn.commit()
             }
         }

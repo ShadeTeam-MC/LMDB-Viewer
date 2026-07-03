@@ -31,12 +31,30 @@ sealed interface Mutation {
         override fun hashCode(): Int =
             31 * (31 * (dbiName?.hashCode() ?: 0) + key.contentHashCode()) + (value?.contentHashCode() ?: 0)
     }
+
+    /** Replaces the pair (key, [from]) with (key, [to]) — a single-duplicate edit on a DUPSORT DBI. */
+    data class Replace(override val dbiName: String?, override val key: ByteArray, val from: ByteArray, val to: ByteArray) : Mutation {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Replace) return false
+            return dbiName == other.dbiName && key.contentEquals(other.key) &&
+                from.contentEquals(other.from) && to.contentEquals(other.to)
+        }
+
+        override fun hashCode(): Int {
+            var h = dbiName?.hashCode() ?: 0
+            h = 31 * h + key.contentHashCode()
+            h = 31 * h + from.contentHashCode()
+            return 31 * h + to.contentHashCode()
+        }
+    }
 }
 
 /** Applies this mutation through the write seam. */
 fun Mutation.applyTo(ops: MutationOps) = when (this) {
     is Mutation.Put -> ops.put(dbiName, key, value)
     is Mutation.Delete -> ops.delete(dbiName, key, value)
+    is Mutation.Replace -> ops.replace(dbiName, key, from, to)
 }
 
 /**
@@ -62,6 +80,10 @@ object Inverses {
     /** Inverse of `delete(key, value)` — re-add the exact pair that was removed. */
     fun forDelete(dbiName: String?, key: ByteArray, value: ByteArray): Mutation =
         Mutation.Put(dbiName, key, value)
+
+    /** Inverse of `replace(key, from, to)` — replace back, i.e. swap the direction. */
+    fun forReplace(dbiName: String?, key: ByteArray, from: ByteArray, to: ByteArray): Mutation =
+        Mutation.Replace(dbiName, key, to, from)
 }
 
 /**

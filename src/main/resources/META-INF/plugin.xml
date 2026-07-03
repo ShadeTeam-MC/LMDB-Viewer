@@ -18,6 +18,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>0.20.0 — DUPSORT editing: for multi-value keys the detail panel now lists every value of the selected key with Add / Edit / Remove. Editing a duplicate replaces just that value (was incorrectly adding a second one). All changes are undoable.</li>
             <li>0.19.0 — Undo for edits: add / edit value / delete in edit mode are now reversible. An Undo button (Ctrl+Z) reverts the last change of the current session; import still warns it cannot be undone.</li>
             <li>0.18.0 — Search by content: the toolbar search now has a mode selector — Key prefix (fast seek, as before), Key contains, or Value contains (substring scan). Needles accept UTF-8 text or 0x-hex; results page with Load more.</li>
             <li>0.17.0 — Usability &amp; polish: a Recent menu to reopen recently used environments (dead/missing paths self-clean); a fresh plugin icon and tree icons with greyed-out entry-count / [RW] / [DUPSORT] markers; Ctrl+C and Copy key / Copy value on table rows; clearer status messages on background failures.</li>

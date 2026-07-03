@@ -111,6 +111,11 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(buildStatusBar(), BorderLayout.SOUTH)
         configureTree()
         configureTable()
+        detailPanel.setDuplicateActions(
+            onAdd = { key -> addValueForKey(key) },
+            onEdit = { key, oldValue -> editValueForKey(key, oldValue) },
+            onRemove = { key, value -> removeValueForKey(key, value) },
+        )
         registerShortcuts()
         reloadRecentlyOpen()
     }
@@ -326,6 +331,11 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (e.valueIsAdjusting) return@addListSelectionListener
             val entry = table.selectedRow.takeIf { it >= 0 }?.let { tableModel.entryAt(it) }
             detailPanel.showEntry(entry)
+            if (entry != null && currentDbi?.info?.isDupSort == true) {
+                reloadDuplicatesFor(entry.key)
+            } else {
+                detailPanel.showDuplicates(null, emptyList(), false)
+            }
             updateEditActions()
         }
 
@@ -626,20 +636,116 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
         val dialog = EntryEditorDialog.forEditValue(project, entry.key, entry.value)
         if (!dialog.showAndGet()) return
         val value = dialog.resultValue ?: return
-        val dupsort = dbi.info.isDupSort
+        applyValueEdit(conn, dbi.info, entry.key, entry.value, value)
+    }
+
+    /**
+     * Edits the value of one pair. On a DUPSORT DBI a plain put would add a second value, so this
+     * uses [team.shade.lmdbviewer.lmdb.MutationOps.replace] to change exactly that duplicate; on a
+     * normal DBI it overwrites. Records the inverse for undo. Shared by the table and the duplicates
+     * panel.
+     */
+    private fun applyValueEdit(conn: LmdbConnection, info: DbiInfo, key: ByteArray, oldValue: ByteArray, newValue: ByteArray) {
+        val dupsort = info.isDupSort
         runBg(
             work = {
-                conn.mutations.put(dbi.info.name, entry.key, value)
-                // The row we edited is the prior value; undo restores it (non-DUPSORT).
-                Inverses.forPut(dbi.info.name, entry.key, value, dupsort, entry.value)
+                if (dupsort) {
+                    conn.mutations.replace(info.name, key, oldValue, newValue)
+                    Inverses.forReplace(info.name, key, oldValue, newValue)
+                } else {
+                    conn.mutations.put(info.name, key, newValue)
+                    Inverses.forPut(info.name, key, newValue, false, oldValue)
+                }
             },
             onSuccess = { inverse ->
                 conn.history.record(inverse)
                 setStatus("Updated value")
                 updateEditActions()
-                refreshAfterMutation(conn, dbi.info.name)
+                refreshAfterMutation(conn, info.name)
+                if (dupsort) reloadDuplicatesFor(key)
             },
             onError = { t -> mutationError("update", t) },
+        )
+    }
+
+    /** Adds another value under [key] (DUPSORT). Opens a value-only dialog and records the inverse. */
+    private fun addValueForKey(key: ByteArray) {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val dialog = EntryEditorDialog.forAddValue(project, key)
+        if (!dialog.showAndGet()) return
+        val value = dialog.resultValue ?: return
+        runBg(
+            work = {
+                conn.mutations.put(dbi.info.name, key, value)
+                // On DUPSORT the put adds a pair; undo removes exactly it.
+                Inverses.forPut(dbi.info.name, key, value, dbi.info.isDupSort, null)
+            },
+            onSuccess = { inverse ->
+                conn.history.record(inverse)
+                setStatus("Added value")
+                updateEditActions()
+                refreshAfterMutation(conn, dbi.info.name)
+                reloadDuplicatesFor(key)
+            },
+            onError = { t -> mutationError("add", t) },
+        )
+    }
+
+    /** Edits the selected duplicate value of [key] from the duplicates panel. */
+    private fun editValueForKey(key: ByteArray, oldValue: ByteArray) {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val dialog = EntryEditorDialog.forEditValue(project, key, oldValue)
+        if (!dialog.showAndGet()) return
+        val newValue = dialog.resultValue ?: return
+        applyValueEdit(conn, dbi.info, key, oldValue, newValue)
+    }
+
+    /** Removes one value of [key] from the duplicates panel (with confirmation); records the inverse. */
+    private fun removeValueForKey(key: ByteArray, value: ByteArray) {
+        val dbi = currentDbi ?: return
+        val conn = dbi.connection
+        if (!conn.writable) return
+        val choice = Messages.showYesNoDialog(
+            project,
+            "Remove this value from key:\n${Previews.preview(key)}\n\nValue:\n${Previews.preview(value)}",
+            "Remove Value",
+            "Remove",
+            "Cancel",
+            Messages.getWarningIcon(),
+        )
+        if (choice != Messages.YES) return
+        runBg(
+            work = {
+                conn.mutations.delete(dbi.info.name, key, value)
+                Inverses.forDelete(dbi.info.name, key, value)
+            },
+            onSuccess = { inverse ->
+                conn.history.record(inverse)
+                setStatus("Removed value")
+                updateEditActions()
+                refreshAfterMutation(conn, dbi.info.name)
+                reloadDuplicatesFor(key)
+            },
+            onError = { t -> mutationError("remove", t) },
+        )
+    }
+
+    /** Loads every value of [key] into the detail panel's duplicates list (DUPSORT DBIs only). */
+    private fun reloadDuplicatesFor(key: ByteArray) {
+        val dbi = currentDbi ?: return
+        if (!dbi.info.isDupSort) {
+            detailPanel.showDuplicates(null, emptyList(), false)
+            return
+        }
+        val conn = dbi.connection
+        runBg(
+            work = { conn.getDuplicates(dbi.info.name, key) },
+            onSuccess = { values -> detailPanel.showDuplicates(key, values, conn.writable) },
+            onError = { t -> setStatus("Failed to load values: ${t.message}") },
         )
     }
 
@@ -667,6 +773,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 setStatus("Deleted entry")
                 updateEditActions()
                 refreshAfterMutation(conn, dbi.info.name)
+                if (dbi.info.isDupSort) reloadDuplicatesFor(entry.key)
             },
             onError = { t -> mutationError("delete", t) },
         )
@@ -684,6 +791,7 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
                 setStatus("Undone — ${conn.history.size} left")
                 updateEditActions()
                 refreshAfterMutation(conn, dbi.info.name)
+                if (dbi.info.isDupSort) reloadDuplicatesFor(inverse.key)
             },
             onError = { t ->
                 conn.history.record(inverse) // the write didn't take effect; keep it undoable
