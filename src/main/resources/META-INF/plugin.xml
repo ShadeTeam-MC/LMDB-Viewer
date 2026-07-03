@@ -14,6 +14,7 @@
             <li>Search by key prefix and inspect DUPSORT multi-value keys.</li>
             <li><b>Optional edit mode</b>: opt in per environment to add, edit, or delete entries (with confirmation).</li>
         </ul>
+        <p>Licensed under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>. Copyright &copy; 2026 ShadeTeam.</p>
     ]]></description>
 
     <change-notes><![CDATA[

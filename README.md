@@ -34,3 +34,7 @@ Full documentation is an **Open Knowledge Format (OKF v0.1)** bundle under [`doc
   [Conventions](docs/conventions.md) · [Roadmap](docs/roadmap.md)
 
 For contributors/agents, [CLAUDE.md](CLAUDE.md) is the index into the bundle.
+
+## License
+
+[Apache License 2.0](LICENSE). Copyright © 2026 ShadeTeam.
