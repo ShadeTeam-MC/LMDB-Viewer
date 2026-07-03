@@ -18,6 +18,7 @@
 
     <change-notes><![CDATA[
         <ul>
+            <li>0.20.1 — Fixes: short printable values that happen to be 4 or 8 bytes (e.g. "2024", "favorite") were auto-decoded as integers instead of text — auto-detect now prefers text for them (you can still pick Integer from the dropdown). Also, on DUPSORT databases the value pane could briefly show a value from a different row, due to an out-of-order background load of a key's duplicates; stale loads are now ignored and refreshing the list no longer previews a value.</li>
             <li>0.20.0 — DUPSORT editing: for multi-value keys the detail panel now lists every value of the selected key with Add / Edit / Remove. Editing a duplicate replaces just that value (was incorrectly adding a second one). All changes are undoable.</li>
             <li>0.19.0 — Undo for edits: add / edit value / delete in edit mode are now reversible. An Undo button (Ctrl+Z) reverts the last change of the current session; import still warns it cannot be undone.</li>
             <li>0.18.0 — Search by content: the toolbar search now has a mode selector — Key prefix (fast seek, as before), Key contains, or Value contains (substring scan). Needles accept UTF-8 text or 0x-hex; results page with Load more.</li>

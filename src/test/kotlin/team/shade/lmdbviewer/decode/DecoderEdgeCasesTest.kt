@@ -123,14 +123,15 @@ class DecoderEdgeCasesTest {
         assertFalse(dec.canDecode(ByteArray(16)))
     }
 
-    // ----- Priority characterization: a 4-byte ASCII string detects as integer -----
+    // ----- Auto-detect prefers text over integer for printable fixed-width values -----
 
     @Test
-    fun fourByteAsciiAutoDetectsAsIntegerByPriority() {
-        // "name" is valid UTF-8 *and* a 4-byte integer width; IntegerDecoder (priority 60) outranks
-        // Utf8Decoder (40), so auto-detect treats short fixed-width values as integers. Documented
-        // behaviour, not a bug — fixed-width keys are usually MDB_INTEGERKEY.
-        assertEquals("int", registry.autoDetect("name".bytes())?.id)
+    fun fourByteAsciiAutoDetectsAsTextNotInteger() {
+        // "name" is valid UTF-8 *and* a 4-byte integer width. Auto-detect prefers text: IntegerDecoder
+        // declines printable values, so a short readable string is not shown as an int32. Binary bytes
+        // of the same width still decode as integers; the user can pick Integer manually.
+        assertEquals("utf8", registry.autoDetect("name".bytes())?.id)
+        assertEquals("int", registry.autoDetect(byteArrayOf(0x00, 0x00, 0x00, 0x01))?.id)
     }
 
     private fun String.bytes() = toByteArray(StandardCharsets.UTF_8)

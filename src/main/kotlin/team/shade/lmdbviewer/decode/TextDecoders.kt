@@ -13,19 +13,11 @@ class Utf8Decoder : ByteDecoder {
     override val displayName: String = "UTF-8"
     override val priority: Int = 40
 
-    override fun canDecode(bytes: ByteArray): Boolean {
-        if (bytes.isEmpty()) return false
-        val text = decodeStrict(bytes) ?: return false
-        return text.count { it.isPrintableOrWhitespace() } >= text.length * PRINTABLE_RATIO
-    }
+    override fun canDecode(bytes: ByteArray): Boolean = looksLikePrintableText(bytes)
 
     override fun decode(bytes: ByteArray): DecodedView {
         val text = decodeStrict(bytes) ?: String(bytes, StandardCharsets.UTF_8)
         return DecodedView(text, monospace = false)
-    }
-
-    private companion object {
-        const val PRINTABLE_RATIO = 0.85
     }
 }
 
@@ -46,6 +38,19 @@ class AsciiDecoder : ByteDecoder {
     override fun decode(bytes: ByteArray): DecodedView =
         DecodedView(String(bytes, StandardCharsets.US_ASCII), monospace = false)
 }
+
+/**
+ * True when [bytes] look like human-readable text: non-empty, valid UTF-8, and at least
+ * [PRINTABLE_TEXT_RATIO] printable. Used both by [Utf8Decoder] and to keep the Integer decoder from
+ * auto-claiming short printable values (e.g. the 4 bytes of "2024" are text, not an int32).
+ */
+internal fun looksLikePrintableText(bytes: ByteArray): Boolean {
+    if (bytes.isEmpty()) return false
+    val text = decodeStrict(bytes) ?: return false
+    return text.count { it.isPrintableOrWhitespace() } >= text.length * PRINTABLE_TEXT_RATIO
+}
+
+private const val PRINTABLE_TEXT_RATIO = 0.85
 
 internal fun decodeStrict(bytes: ByteArray): String? = try {
     val decoder = StandardCharsets.UTF_8.newDecoder()

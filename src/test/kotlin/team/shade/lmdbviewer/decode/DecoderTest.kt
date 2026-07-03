@@ -70,6 +70,22 @@ class DecoderTest {
     }
 
     @Test
+    fun printableTextOfIntegerWidthDecodesAsTextNotInteger() {
+        // "2024" and "favorite" are 4 and 8 bytes, but they are text — auto-detect must not read them
+        // as integers (regression: the Integer decoder used to win on any 1/2/4/8-byte value).
+        assertEquals("utf8", registry.autoDetect("2024".toByteArray())?.id)
+        assertEquals("utf8", registry.autoDetect("favorite".toByteArray())?.id)
+        assertFalse(IntegerDecoder().canDecode("2024".toByteArray()))
+    }
+
+    @Test
+    fun binaryOfIntegerWidthStillDecodesAsInteger() {
+        val be1000 = byteArrayOf(0x00, 0x00, 0x03, 0xE8.toByte()) // not valid/printable UTF-8
+        assertTrue(IntegerDecoder().canDecode(be1000))
+        assertEquals("int", registry.autoDetect(be1000)?.id)
+    }
+
+    @Test
     fun autoDetectNeverThrowsOnEmpty() {
         assertNotNull(registry.autoDetect(ByteArray(0)))
     }

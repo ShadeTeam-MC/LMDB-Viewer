@@ -12,7 +12,10 @@ class IntegerDecoder : ByteDecoder {
     override val displayName: String = "Integer"
     override val priority: Int = 60
 
-    override fun canDecode(bytes: ByteArray): Boolean = bytes.size in INT_SIZES
+    // Auto-detect integers only for non-text bytes: a 4- or 8-byte printable value like "2024" or
+    // "favorite" is text, not an integer. The user can still pick Integer manually from the dropdown.
+    override fun canDecode(bytes: ByteArray): Boolean =
+        bytes.size in INT_SIZES && !looksLikePrintableText(bytes)
 
     override fun decode(bytes: ByteArray): DecodedView {
         if (bytes.size !in INT_SIZES) {

@@ -35,13 +35,16 @@ class DuplicatesPanel : JPanel(BorderLayout()) {
 
     private var currentKey: ByteArray? = null
     private var editable = false
+    private var suppressSelectionEvents = false
 
     init {
         border = JBUI.Borders.empty(4)
         list.selectionMode = ListSelectionModel.SINGLE_SELECTION
         list.cellRenderer = SimpleListCellRenderer.create("∅") { Previews.preview(it) }
         list.addListSelectionListener { e ->
-            if (e.valueIsAdjusting) return@addListSelectionListener
+            // Ignore programmatic repopulation ([setData]); only react to the user picking a value,
+            // so refreshing the list never previews a value from a different key in the value pane.
+            if (e.valueIsAdjusting || suppressSelectionEvents) return@addListSelectionListener
             onSelect(list.selectedValue)
             updateButtons()
         }
@@ -73,8 +76,15 @@ class DuplicatesPanel : JPanel(BorderLayout()) {
     fun setData(key: ByteArray, values: List<ByteArray>, editable: Boolean) {
         currentKey = key
         this.editable = editable
-        model.clear()
-        values.forEach { model.addElement(it) }
+        // Repopulate without firing selection callbacks (which would preview a value in the value pane).
+        suppressSelectionEvents = true
+        try {
+            model.clear()
+            values.forEach { model.addElement(it) }
+            list.clearSelection()
+        } finally {
+            suppressSelectionEvents = false
+        }
         header.text = "Values (${values.size})"
         updateButtons()
     }

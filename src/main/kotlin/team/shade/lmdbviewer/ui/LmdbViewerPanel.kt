@@ -742,12 +742,24 @@ class LmdbViewerPanel(private val project: Project) : JPanel(BorderLayout()) {
             return
         }
         val conn = dbi.connection
+        // Reset the panel to the new key immediately (empty), so a slower/older load can't leave the
+        // list — and its add/edit/remove actions — pointing at a previously selected key.
+        detailPanel.showDuplicates(key, emptyList(), conn.writable)
         runBg(
             work = { conn.getDuplicates(dbi.info.name, key) },
-            onSuccess = { values -> detailPanel.showDuplicates(key, values, conn.writable) },
+            onSuccess = { values ->
+                // Drop a stale result: the selection may have moved to another key while we were reading.
+                if (currentSelectedKey()?.contentEquals(key) == true) {
+                    detailPanel.showDuplicates(key, values, conn.writable)
+                }
+            },
             onError = { t -> setStatus("Failed to load values: ${t.message}") },
         )
     }
+
+    /** The key of the currently selected table row, or null if no row is selected. */
+    private fun currentSelectedKey(): ByteArray? =
+        table.selectedRow.takeIf { it >= 0 }?.let { tableModel.entryAt(it)?.key }
 
     private fun deleteEntry() {
         val dbi = currentDbi ?: return

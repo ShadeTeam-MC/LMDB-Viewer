@@ -1,5 +1,28 @@
 # Log
 
+## 2026-07-03 (fix, auto-detect)
+
+**Printable values decoded as integers.** A value that is valid printable text but happens to be 1/2/4/8
+bytes long (e.g. `"2024"`, `"favorite"`) was auto-detected as an **integer**, because `IntegerDecoder`
+(priority 60) outranks `Utf8Decoder` (40) and `canDecode` only checked the byte length. Fixed by
+teaching `IntegerDecoder.canDecode` to decline printable text: extracted `looksLikePrintableText`
+(valid UTF-8 + ≥85% printable) in `decode/TextDecoders.kt`, reused by `Utf8Decoder`, and integer
+auto-detect is now `size in {1,2,4,8} && !looksLikePrintableText(bytes)`. Binary values of those widths
+still decode as integers; the user can still pick Integer manually. New `DecoderTest` cases. Part of
+0.20.1.
+
+## 2026-07-03 (fix, dupsort-detail)
+
+**Detail panes showing the wrong row's value.** On a DUPSORT DBI, selecting a row kicks off a
+background `getDuplicates` load; out-of-order completion could populate the duplicates list — and the
+value pane — with a *previously* selected key's values. Two guards: `reloadDuplicatesFor` now resets
+the panel to the newly selected key immediately and, on completion, applies the result only if the
+selection still points at that key (`currentSelectedKey` compares by content); `DuplicatesPanel.setData`
+repopulates under a `suppressSelectionEvents` flag and clears the list selection, so a programmatic
+refresh never fires `onSelect` (which previews a value in the value pane). This also prevents the
+list's Add/Edit/Remove from ever targeting a stale key. Part of 0.20.1 (`pluginVersion` 0.20.0 →
+0.20.1, fix → patch).
+
 ## 2026-07-02 (feat, dupsort-editing)
 
 **DUPSORT value editing.** Multi-value keys can now be edited value-by-value, and a long-standing bug
