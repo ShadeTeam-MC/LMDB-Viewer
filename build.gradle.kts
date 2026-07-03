@@ -32,6 +32,9 @@ dependencies {
 
     // Plain JUnit4 unit/integration tests (no IntelliJ platform test fixtures needed).
     testImplementation("junit:junit:4.13.2")
+    // The plugin doesn't bundle the Kotlin stdlib (the IDE provides it at runtime), but the plain-JVM
+    // sample generator (generateSampleDb) needs it on the test runtime classpath.
+    testRuntimeOnly("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
 }
 
 intellijPlatform {
@@ -68,6 +71,20 @@ tasks {
             "--add-opens=java.base/java.nio=ALL-UNNAMED",
             "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
         )
+    }
+
+    // Generates a sample LMDB environment exercising every plugin feature (see SampleDbGenerator).
+    //   ./gradlew generateSampleDb [-PsampleOut=<dir>]
+    register<JavaExec>("generateSampleDb") {
+        group = "lmdb viewer"
+        description = "Generate a sample LMDB environment that exercises every plugin feature."
+        classpath = sourceSets["test"].runtimeClasspath
+        mainClass.set("team.shade.lmdbviewer.lmdb.SampleDbGenerator")
+        jvmArgs(
+            "--add-opens=java.base/java.nio=ALL-UNNAMED",
+            "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+        )
+        args(providers.gradleProperty("sampleOut").orElse("samples/showcase-lmdb").get())
     }
 
     // lmdbjava uses JNR-FFI which reflectively accesses java.nio internals on JDK 21.

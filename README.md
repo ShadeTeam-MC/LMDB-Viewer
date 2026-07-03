@@ -6,7 +6,9 @@ delete) behind an explicit per-environment toggle.
 
 It opens an LMDB environment (a `data.mdb` directory or single-file `*.mdb` store), browses named
 sub-databases (DBIs), pages large entry sets lazily, and decodes opaque byte keys/values
-(hex, UTF-8/ASCII, JSON, integers) through a pluggable decoder extension point.
+(hex, UTF-8/ASCII, JSON, CBOR, integers) through a pluggable decoder extension point.
+
+![LMDB Viewer tool window](docs/images/screenshot.png)
 
 ## Build & run
 
